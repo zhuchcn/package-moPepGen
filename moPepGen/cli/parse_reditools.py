@@ -122,7 +122,8 @@ def parse_reditools(args:argparse.Namespace) -> None:
     ref_data = common.load_references(
         args=args,
         load_genome=False,
-        load_canonical_peptides=False
+        load_canonical_peptides=False,
+        load_proteome=False
     )
     anno = ref_data.anno
 

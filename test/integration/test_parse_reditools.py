@@ -15,7 +15,6 @@ class TestParseREDItools(TestCaseIntegration):
             -i {self.data_dir}/reditools/reditools_annotated.txt \\
             -o {self.work_dir}/reditools.gvf \\
             -a {self.data_dir}/annotation.gtf \\
-            -p {self.data_dir}/translate.fasta \\
             --source RES
         """
         res = sp.run(cmd, shell=True, check=False, capture_output=True)

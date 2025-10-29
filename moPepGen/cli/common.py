@@ -316,8 +316,7 @@ def load_references(args:argparse.Namespace, load_genome:bool=True,
             proteome.dump_fasta(args.proteome_fasta, source=args.reference_source)
             logger.info('Proteome FASTA loaded.')
             anno.check_protein_coding(proteome, invalid_protein_as_noncoding)
-
-        anno.check_protein_coding(proteome, True)
+            anno.check_protein_coding(proteome, True)
 
         if load_genome:
             genome = dna.DNASeqDict()
