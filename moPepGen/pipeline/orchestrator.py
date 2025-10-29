@@ -243,6 +243,7 @@ class CallVariantOrchestrator:
             in_bubble_cap_step_down=args.in_bubble_cap_step_down,
             min_nodes_to_collapse=args.min_nodes_to_collapse,
             naa_to_collapse=args.naa_to_collapse,
+            flanking_size=args.flanking_size,
         )
 
         self.flags = Flags(
