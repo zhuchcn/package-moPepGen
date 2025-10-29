@@ -151,11 +151,21 @@ def call_variant_peptide(args: argparse.Namespace) -> None:
         flanking_size=args.flanking_size,
     )
 
+    # Adjust parameters for enzyme=None (immunopeptidomics/neoantigen calling)
+    if cleavage_params.enzyme is None:
+        cleavage_params.max_length = float('inf')
+        cleavage_params.min_length = cleavage_params.flanking_size
+        cleavage_params.min_mw = 0
+        load_canonical_peptides = False
+    else:
+        load_canonical_peptides = True
+
     # Load references in the CLI layer
     reference_data = common.load_references(
         args=args,
         invalid_protein_as_noncoding=args.invalid_protein_as_noncoding,
         cleavage_params=cleavage_params,
+        load_canonical_peptides=load_canonical_peptides,
         load_codon_tables=True,
     )
 
