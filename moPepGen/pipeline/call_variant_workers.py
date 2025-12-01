@@ -161,15 +161,14 @@ def call_peptide_main(tx_id: str, tx_variants: List['seqvar.VariantRecord'],
 
     tracer.graph = GraphPhase.PVG
 
-    if mode == 'sliding_window':
-        pgraph.create_atomic_graph()
-    elif cleavage_params.enzyme is not None:
+    if cleavage_params.enzyme is not None:
         pgraph.create_cleavage_graph()
         mode = 'misc'
-    else:
+    elif mode == 'archipel':
         pgraph.create_islands_graph()
         pgraph.collapse_ref_nodes()
-        mode = 'archipel'
+    else:
+        pgraph.create_atomic_graph()
 
     if tx_model.is_protein_coding:
         peptide_map = pgraph.call_variant_peptides(

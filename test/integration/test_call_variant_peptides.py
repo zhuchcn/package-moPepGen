@@ -1486,5 +1486,6 @@ class TestCallVariantPeptides(TestCaseIntegration):
         expected = test_dir/'expected.txt'
         reference = test_dir
         self.default_test_case(gvf, reference, expected, {
-            'cleavage_rule': 'None'
+            'cleavage_rule': 'None',
+            'peptide_finding_mode': 'archipel'
         })
