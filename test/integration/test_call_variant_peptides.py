@@ -55,6 +55,7 @@ def create_base_args() -> argparse.Namespace:
     args.threads = 1
     args.timeout_seconds = 1800
     args.skip_failed = False
+    args.peptide_finding_mode = 'misc'
     return args
 
 def create_args_generate_index(work_dir:Path, data_dir:Path) -> argparse.Namespace:
@@ -1473,7 +1474,7 @@ class TestCallVariantPeptides(TestCaseIntegration):
         expected = test_dir/'brute_force.txt'
         reference = test_dir
         self.default_test_case(gvf, reference, expected)
-    
+
     def test_call_variant_peptide_archipel_case_1(self):
         """
         Test callVariant with --cleavage-rule None. Example data provided by lyl
