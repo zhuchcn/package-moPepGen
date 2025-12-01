@@ -59,12 +59,15 @@ def generate_index(args:argparse.Namespace):
     path_gtf:Path = args.annotation_gtf
     parth_proteome:Path = args.proteome_fasta
 
-    rule:str = args.cleavage_rule
-    miscleavage:int = int(args.miscleavage)
-    min_mw:float = float(args.min_mw)
-    min_length:int = int(args.min_length)
-    max_length:int = int(args.max_length)
-    exception = args.cleavage_exception
+    cp = params.CleavageParams(
+        enzyme=args.cleavage_rule,
+        exception=args.cleavage_exception,
+        miscleavage=args.miscleavage,
+        min_mw=args.min_mw,
+        min_length = args.min_length,
+        max_length = args.max_length
+    )
+
     invalid_protein_as_noncoding:bool = args.invalid_protein_as_noncoding
 
     output_dir:Path = args.output_dir
@@ -131,16 +134,16 @@ def generate_index(args:argparse.Namespace):
     index_dir.metadata.codon_tables = codon_tables
 
     # canonical peptide pool
-    if rule is None or rule.lower() == 'none':
+    if cp.enzyme is None or cp.enzyme.lower() == 'none':
         logger.info('No cleavage rule specified. Skip generating canonical peptides.')
     else:
         canonical_peptides = proteome.create_unique_peptide_pool(
-            anno=anno, rule=rule, exception=exception, miscleavage=miscleavage,
-            min_mw=min_mw, min_length = min_length, max_length = max_length
+            anno=anno, rule=cp.enzyme, exception=cp.exception, miscleavage=cp.miscleavage,
+            min_mw=cp.min_mw, min_length = cp.min_length, max_length = cp.max_length
         )
         cleavage_params = params.CleavageParams(
-            enzyme=rule, exception=exception, miscleavage=miscleavage,
-            min_mw=min_mw, min_length = min_length, max_length = max_length
+            enzyme=cp.enzyme, exception=cp.exception, miscleavage=cp.miscleavage,
+            min_mw=cp.min_mw, min_length = cp.min_length, max_length = cp.max_length
         )
         logger.info('canonical peptide pool generated.')
         index_dir.save_canonical_peptides(canonical_peptides, cleavage_params)

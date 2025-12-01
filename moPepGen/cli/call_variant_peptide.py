@@ -197,5 +197,7 @@ def call_variant_peptide(args: argparse.Namespace) -> None:
     )
 
     # Pass reference_data to orchestrator (avoids circular import)
-    orchestrator = CallVariantOrchestrator(args, reference_data=reference_data)
+    orchestrator = CallVariantOrchestrator(
+        args,  cleavage_params=cleavage_params, reference_data=reference_data
+    )
     orchestrator.run()

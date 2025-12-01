@@ -220,7 +220,8 @@ class CallVariantOrchestrator:
         flags: Boolean flags controlling behavior.
         limits: Numerical limits for graph construction.
     """
-    def __init__(self, args: argparse.Namespace, reference_data: params.ReferenceData = None):
+    def __init__(self, args: argparse.Namespace, cleavage_params: params.CleavageParams = None,
+            reference_data: params.ReferenceData = None):
         self.args = args
         self.variant_files: List = args.input_path
         self.output_path = args.output_path
@@ -234,20 +235,7 @@ class CallVariantOrchestrator:
         self.peptide_table_temp_path = get_peptide_table_path_temp(self.output_path)
         self.peptide_table_output_path = get_peptide_table_path(self.output_path)
 
-        self.cleavage_params = params.CleavageParams(
-            enzyme=args.cleavage_rule,
-            exception=args.cleavage_exception,
-            miscleavage=int(args.miscleavage),
-            min_mw=float(args.min_mw),
-            min_length=args.min_length,
-            max_length=args.max_length,
-            max_variants_per_node=args.max_variants_per_node[0],
-            additional_variants_per_misc=args.additional_variants_per_misc[0],
-            in_bubble_cap_step_down=args.in_bubble_cap_step_down,
-            min_nodes_to_collapse=args.min_nodes_to_collapse,
-            naa_to_collapse=args.naa_to_collapse,
-            flanking_size=args.flanking_size,
-        )
+        self.cleavage_params = cleavage_params
 
         self.flags = Flags(
             noncanonical_transcripts=args.noncanonical_transcripts,

@@ -55,11 +55,11 @@ def call_alt_translation(args: argparse.Namespace) -> None:
         args.output_path, OUTPUT_FILE_FORMATS, check_writable=True
     )
 
-    cleavage_params = params.CleavageParams(
+    cp = params.CleavageParams(
         enzyme=args.cleavage_rule,
         exception=args.cleavage_exception,
-        miscleavage=int(args.miscleavage),
-        min_mw=float(args.min_mw),
+        miscleavage=args.miscleavage,
+        min_mw=args.min_mw,
         min_length=args.min_length,
         max_length=args.max_length
     )
@@ -74,7 +74,7 @@ def call_alt_translation(args: argparse.Namespace) -> None:
 
     # Load references in CLI layer
     ref_data = common.load_references(
-        args=args, load_proteome=True, cleavage_params=cleavage_params,
+        args=args, load_proteome=True, cleavage_params=cp,
         load_codon_tables=True
     )
 
@@ -95,7 +95,7 @@ def call_alt_translation(args: argparse.Namespace) -> None:
                 genome=ref_data.genome,
                 anno=ref_data.anno,
                 codon_table=codon_table,
-                cleavage_params=cleavage_params,
+                cleavage_params=cp,
                 w2f_reassignment=args.w2f_reassignment,
                 sec_truncation=args.selenocysteine_termination
             )
@@ -107,7 +107,7 @@ def call_alt_translation(args: argparse.Namespace) -> None:
             peptide_pool.add_peptide(
                 peptide=peptide,
                 canonical_peptides=ref_data.canonical_peptides,
-                cleavage_params=cleavage_params
+                cleavage_params=cp
             )
 
     peptide_pool.write(args.output_path)

@@ -160,14 +160,12 @@ def add_args_cleavage(parser:argparse.ArgumentParser, enzyme_only:bool=False):
         '-l', '--min-length',
         type=int,
         help='The minimal length of non-canonical peptides, inclusive.',
-        default=7,
         metavar='<number>'
     )
     group.add_argument(
         '-x', '--max-length',
         type=int,
         help='The maximum length of non-canonical peptides, inclusive.',
-        default=25,
         metavar='<number>'
     )
     group.add_argument(
@@ -324,16 +322,14 @@ def load_references(args:argparse.Namespace, load_genome:bool=True,
             logger.info('Genome assembly FASTA loaded.')
 
         if load_canonical_peptides:
-            rule:str = args.cleavage_rule
-            miscleavage:int = int(args.miscleavage)
-            min_mw:float = float(args.min_mw)
-            exception = args.cleavage_exception
-            min_length:int = args.min_length
-            max_length:int = args.max_length
             canonical_peptides = proteome.create_unique_peptide_pool(
-                anno=anno, rule=rule, exception=exception,
-                miscleavage=miscleavage, min_mw=min_mw, min_length=min_length,
-                max_length=max_length
+                anno=anno,
+                rule=cleavage_params.enzyme,
+                exception=cleavage_params.exception,
+                miscleavage=cleavage_params.miscleavage,
+                min_mw=cleavage_params.min_mw,
+                min_length=cleavage_params.min_length,
+                max_length=cleavage_params.max_length
             )
             logger.info('canonical peptide pool generated.')
 

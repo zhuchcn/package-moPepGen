@@ -2,11 +2,11 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 import dataclasses
-from moPepGen import aa
+from moPepGen import aa, constant
 
 
 if TYPE_CHECKING:
-    from typing import Set, Dict, List
+    from typing import Set, Dict, List, Tuple
     from moPepGen import dna, gtf
 
 
@@ -34,17 +34,27 @@ class CleavageParams():
         - naa_to_collapse (int): The number of bases used for pop collapse.
     """
     def __init__(self, enzyme:str=None, exception:str=None, miscleavage:int=2,
-            min_mw:int=500, min_length:int=7, max_length:int=25,
+            min_mw:int=500, min_length:int=None, max_length:int=None,
             max_variants_per_node:int=7, additional_variants_per_misc:int=2,
             in_bubble_cap_step_down:int=0, min_nodes_to_collapse:int=30,
-            naa_to_collapse:int=5, flanking_size:int=9):
+            naa_to_collapse:int=5, flanking_size:int=9, peptide_finding_mode:str='misc'):
         """ constructor """
         self.enzyme = enzyme
         if self.enzyme and self.enzyme.lower() == 'none':
             self.enzyme = None
+        if self.enzyme is None and peptide_finding_mode == constant.PeptideFindingMode.MISC.value:
+            self.peptide_finding_mode = constant.PeptideFindingMode.SLIDING_WINDOW.value
         self.exception = exception
         self.miscleavage = miscleavage
         self.min_mw = min_mw
+
+        min_length_default, max_length_default = self.get_default_peptide_lengths(
+            peptide_finding_mode
+        )
+        if min_length is None:
+            min_length = min_length_default
+        if max_length is None:
+            max_length = max_length_default
         self.min_length = min_length
         self.max_length = max_length
         self.max_variants_per_node = max_variants_per_node
@@ -58,6 +68,13 @@ class CleavageParams():
                 self.exception = 'trypsin_exception'
             else:
                 self.exception = None
+
+    def get_default_peptide_lengths(self, peptide_finding_mode) -> Tuple[int, int]:
+        """ Get default peptide lengths based on mode """
+        if peptide_finding_mode == constant.PeptideFindingMode.MISC.value:
+            return (7, 25)
+        else:
+            return (8, 11)
 
     def jsonfy(self, graph_params:bool=False):
         """ jsonfy """
