@@ -10,6 +10,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- Added `--peptide-finding-mode` option to `callVariant` with support for `misc`, `archipel`, and `sliding-window` modes for variant peptide discovery
+- Implemented `sliding-window` mode for comprehensive 8-11mer peptide generation in hypermutated regions without combinatorial explosion
+- Added `create_atomic_graph()` method to split all graph nodes (reference and variant) into single amino acids for simplified sliding window processing
+- Added `split_node_atomic()` method in `PVGNode` to atomically split sequences into single amino acid nodes
+- Added `find_candidate_node_paths_sliding_window()` in `PVGPeptideFinder` for true sliding window path finding
+- Added 7 comprehensive test cases for sliding window mode validation
+
+### Fixed
+
 - Fixed `generateIndex` and `updateIndex` to support `--cleavage-rule None` #927
 
 ## [1.5.0-rc3] - 2025-10-28

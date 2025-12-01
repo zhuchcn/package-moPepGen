@@ -99,7 +99,7 @@ def call_peptide_main(tx_id: str, tx_variants: List['seqvar.VariantRecord'],
         cleavage_params: params.CleavageParams,
         max_adjacent_as_mnv: int, truncate_sec: bool, w2f: bool,
         denylist: Set[str], save_graph: bool, coding_novel_orf: bool,
-        tracer: TimeoutTracer
+        tracer: TimeoutTracer, mode: str = 'misc'
         ) -> TypeCallPeptideReturnData:
     """Call variant peptides from transcriptional variants (main workflow).
 
@@ -161,7 +161,9 @@ def call_peptide_main(tx_id: str, tx_variants: List['seqvar.VariantRecord'],
 
     tracer.graph = GraphPhase.PVG
 
-    if cleavage_params.enzyme is not None:
+    if mode == 'sliding_window':
+        pgraph.create_atomic_graph()
+    elif cleavage_params.enzyme is not None:
         pgraph.create_cleavage_graph()
         mode = 'misc'
     else:
@@ -206,7 +208,7 @@ def call_peptide_fusion(variant: 'seqvar.VariantRecord',
         gene_seqs: Dict[str, 'dna.DNASeqRecordWithCoordinates'],
         cleavage_params: params.CleavageParams, max_adjacent_as_mnv: int,
         w2f_reassignment: bool, denylist: Set[str], save_graph: bool,
-        coding_novel_orf: bool, tracer: TimeoutTracer
+        coding_novel_orf: bool, tracer: TimeoutTracer, mode: str = 'misc'
         ) -> TypeCallPeptideReturnData:
     """Call variant peptides from gene fusion events.
 
@@ -283,19 +285,22 @@ def call_peptide_fusion(variant: 'seqvar.VariantRecord',
 
     tracer.graph = GraphPhase.PVG
 
-    if cleavage_params.enzyme is not None:
+    # Auto-select graph type and mode based on enzyme and passed mode
+    peptide_mode = mode
+    if mode == 'sliding_window':
+        pgraph.create_atomic_graph()
+    elif cleavage_params.enzyme is not None:
         pgraph.create_cleavage_graph()
-        mode = 'misc'
     else:
         pgraph.create_islands_graph()
         pgraph.collapse_ref_nodes()
-        mode = 'archipel'
+        # Default to archipel if mode is misc but no enzyme
+        if mode == 'misc':
+            peptide_mode = 'archipel'
 
     if tx_model.is_protein_coding:
         peptide_map = pgraph.call_variant_peptides(
-            mode=mode,
-            denylist=denylist,
-            w2f=w2f_reassignment,
+            mode=peptide_mode,
             check_external_variants=True,
             check_orf=False
         )
@@ -304,7 +309,7 @@ def call_peptide_fusion(variant: 'seqvar.VariantRecord',
 
     if not tx_model.is_protein_coding or coding_novel_orf:
         peptide_novel_orf = pgraph.call_variant_peptides(
-            mode=mode,
+            mode=peptide_mode,
             denylist=denylist,
             w2f=w2f_reassignment,
             check_external_variants=True,
@@ -325,7 +330,7 @@ def call_peptide_circ_rna(record: 'circ.CircRNAModel',
         codon_table: 'CodonTableInfo',
         cleavage_params: params.CleavageParams, max_adjacent_as_mnv: int,
         backsplicing_only: bool, w2f_reassignment: bool, denylist: Set[str],
-        save_graph: bool, tracer: TimeoutTracer
+        save_graph: bool, tracer: TimeoutTracer, mode: str = 'misc'
         ) -> TypeCallPeptideReturnData:
     """Call variant peptides from circular RNA.
 
@@ -400,16 +405,21 @@ def call_peptide_circ_rna(record: 'circ.CircRNAModel',
 
     tracer.graph = GraphPhase.PVG
 
-    if cleavage_params.enzyme is not None:
+    # Auto-select graph type and mode based on enzyme and passed mode
+    peptide_mode = mode
+    if mode == 'sliding_window':
+        pgraph.create_atomic_graph()
+    elif cleavage_params.enzyme is not None:
         pgraph.create_cleavage_graph()
-        mode = 'misc'
     else:
         pgraph.create_islands_graph()
         pgraph.collapse_ref_nodes()
-        mode = 'archipel'
+        # Default to archipel if mode is misc but no enzyme
+        if mode == 'misc':
+            peptide_mode = 'archipel'
 
     peptide_map = pgraph.call_variant_peptides(
-        mode=mode,
+        mode=peptide_mode,
         denylist=denylist,
         circ_rna=record,
         backsplicing_only=backsplicing_only,
@@ -440,6 +450,7 @@ def call_variant_peptides_wrapper(tx_id: str,
         coding_novel_orf: bool,
         skip_failed: bool,
         tracer: TimeoutTracer,
+        mode: str = 'misc',
         **kwargs
         ) -> Tuple[
             Dict['Seq', List['AnnotatedPeptideLabel']],
@@ -550,7 +561,8 @@ def call_variant_peptides_wrapper(tx_id: str,
                     denylist=denylist,
                     save_graph=save_graph,
                     coding_novel_orf=coding_novel_orf,
-                    tracer=tracer
+                    tracer=tracer,
+                    mode=mode
                 )
                 main_peptides = set(peptide_map.keys())
                 dgraphs = (dgraph, dgraphs[1], dgraphs[2])
@@ -591,7 +603,7 @@ def call_variant_peptides_wrapper(tx_id: str,
                 codon_table=codon_table, tx_seqs=tx_seqs, gene_seqs=gene_seqs,
                 cleavage_params=cleavage_params, max_adjacent_as_mnv=max_adjacent_as_mnv,
                 w2f_reassignment=w2f_reassignment, denylist=denylist, save_graph=save_graph,
-                coding_novel_orf=coding_novel_orf, tracer=tracer
+                coding_novel_orf=coding_novel_orf, tracer=tracer, mode=mode
             )
             dgraphs[1][variant.id] = dgraph
             pgraphs[1][variant.id] = pgraph
@@ -624,7 +636,7 @@ def call_variant_peptides_wrapper(tx_id: str,
                     max_adjacent_as_mnv=max_adjacent_as_mnv,
                     w2f_reassignment=w2f_reassignment, denylist=denylist,
                     save_graph=save_graph, backsplicing_only=backsplicing_only,
-                    tracer=tracer
+                    tracer=tracer, mode=mode
                 )
 
             except Exception as e:

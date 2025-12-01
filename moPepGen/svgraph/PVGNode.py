@@ -733,6 +733,28 @@ class PVGNode():
             i = 0
         return nodes
 
+    def split_node_atomic(self) -> Deque[PVGNode]:
+        """
+        Split ALL amino acids into individual single-AA nodes.
+        Unlike split_node_archipel which keeps variant islands together,
+        this splits everything (reference AND variant) into atomic units.
+
+        Used by create_atomic_graph() for sliding window mode.
+        """
+        nodes = deque([])
+        cur = self
+
+        while len(cur.seq.seq) > 1:
+            # Split off single amino acid at position 1
+            last = cur.split_node(1)
+            nodes.append(cur)
+            cur = last
+
+        # Append the final single amino acid node
+        nodes.append(cur)
+
+        return nodes
+
     def collapse_identical_downstreams(self) -> None:
         """ Collapse downstream ndoes that are identifical """
         node_map:Dict[Tuple,List[PVGNode]] = {}

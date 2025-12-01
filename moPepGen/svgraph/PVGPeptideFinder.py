@@ -374,6 +374,32 @@ class PVGNodePathReef(PVGNodePath):
     def generate_kmer(self, i) -> Tuple[str]:
         return tuple(self.nodes[j].id for j in range(i, i + self.flanking_size))
 
+class PVGNodePathSlidingWindow(PVGNodePath):
+    """ PVGNodePathSlidingWindow for generating all variant-containing peptides
+    of length 8-11 AA using a sliding window approach.
+
+    Unlike archipel/reef modes, this enumerates all possible 8-11mer windows
+    that contain at least one variant, without requiring flanking structures.
+    Ideal for neoantigen prediction where comprehensive coverage is needed.
+    """
+    def __init__(self, nodes:List[PVGNode], additional_variants:Set[VariantRecord],
+            min_length:int=8, max_length:int=11):
+        """ Constructor """
+        super().__init__(
+            nodes=nodes,
+            additional_variants=additional_variants
+        )
+        self.min_length = min_length
+        self.max_length = max_length
+
+    def __copy__(self) -> PVGNodePathSlidingWindow:
+        """ copy """
+        new_path:PVGNodePathSlidingWindow = super().__copy__()
+        new_path.__class__ = self.__class__
+        new_path.min_length = self.min_length
+        new_path.max_length = self.max_length
+        return new_path
+
 TypeVariantPeptideMetadataMap = Dict[Seq, Dict[str, PVGPeptideMetadata]]
 
 class PVGCandidateNodePaths():
@@ -798,7 +824,7 @@ class PVGPeptideFinder():
           every node. This is useful for PVG derived from a circRNA, and this
           argument is the circRNA variant.
     """
-    PEPTIDE_FINDING_MODES = ['misc', 'archipel']
+    PEPTIDE_FINDING_MODES = ['misc', 'archipel', 'sliding_window']
 
     def __init__(self, tx_id:str, peptides:TypeVariantPeptideMetadataMap=None,
             seqs:Set[Seq]=None, labels:Dict[str,int]=None, mode:str='misc',
@@ -1030,6 +1056,119 @@ class PVGPeptideFinder():
                 queue.append(new_path)
         return paths
 
+    def find_candidate_node_paths_sliding_window(self, node:PVGNode,
+            orfs:List[PVGOrf], cleavage_params:CleavageParams, tx_id:str, gene_id:str,
+            leading_node:PVGNode, subgraphs:SubgraphTree, is_circ_rna:bool,
+            backsplicing_only:bool, min_length:int=8, max_length:int=11
+            ) -> PVGCandidateNodePaths:
+        """
+        Find all 8-11mer peptide paths using true sliding window on atomic graph.
+
+        With create_atomic_graph(), all nodes are single amino acids, so this
+        becomes trivial: walk N consecutive nodes (8-11 nodes = 8-11 AA), check
+        for variants, emit if valid, then slide to next position.
+
+        No truncation, no overshoot, no complex path enumeration - just simple
+        consecutive node walking.
+
+        Args:
+            node (PVGNode): Starting node (single AA in atomic graph)
+            orfs (List[PVGOrf]): ORF start and end locations
+            cleavage_params (CleavageParams): Cleavage parameters (min/max length used)
+            tx_id (str): Transcript ID
+            gene_id (str): Gene ID
+            leading_node (PVGNode): The original node in the graph
+            subgraphs (SubgraphTree): Subgraph tree
+            is_circ_rna (bool): Whether this is circular RNA
+            backsplicing_only (bool): Only output peptides spanning backsplice junction
+            min_length (int): Minimum peptide length (default 8)
+            max_length (int): Maximum peptide length (default 11)
+
+        Returns:
+            PVGCandidateNodePaths: Collection of candidate node paths representing
+                all possible 8-11mer windows
+        """
+        if not orfs:
+            raise ValueError('ORFs are empty')
+
+        paths = PVGCandidateNodePaths(
+            data=deque([]),
+            cleavage_params=cleavage_params,
+            orfs=orfs,
+            tx_id=tx_id,
+            gene_id=gene_id,
+            leading_node=leading_node,
+            subgraphs=subgraphs,
+            is_circ_rna=is_circ_rna
+        )
+
+        # Build path of min_length nodes first
+        cur_path = PVGNodePath([node], set())
+        queue:Deque[PVGNodePath] = deque([cur_path])
+
+        while queue:
+            cur_path = queue.pop()
+            cur_len = len(cur_path)  # Number of amino acids
+
+            # If we have at least min_length AA, emit all windows from min to max length
+            if cur_len >= min_length:
+                for window_len in range(min_length, min(max_length, cur_len) + 1):
+                    # Take first window_len nodes
+                    window_nodes = cur_path.nodes[:window_len]
+
+                    # Check if window contains any variants
+                    has_variant = any(
+                        any(not v.is_silent for v in n.variants)
+                        for n in window_nodes
+                    )
+
+                    if not has_variant:
+                        continue
+
+                    # Check backsplicing requirement for circRNA
+                    if backsplicing_only:
+                        subgraph_ids = set().union(*[n.get_subgraph_id_set() for n in window_nodes])
+                        if len(subgraph_ids) <= 1:
+                            continue
+
+                    # Create window path and add to results
+                    window_path = PVGNodePath(
+                        nodes=list(window_nodes),
+                        additional_variants=set()
+                    )
+                    paths.data.append(window_path)
+
+            # Stop extending if we've reached max_length
+            if cur_len >= max_length:
+                continue
+
+            # Extend by one more node
+            cur_node = cur_path.nodes[-1]
+            for out_node in cur_node.out_nodes:
+                # Skip stop codons
+                if len(out_node.seq.seq) == 1 and out_node.seq.seq.startswith('*'):
+                    continue
+
+                # Skip hybrid nodes in circRNA
+                if is_circ_rna and out_node.is_hybrid_node(subgraphs):
+                    continue
+
+                # Skip truncated nodes
+                if out_node.truncated:
+                    continue
+
+                # Extend path
+                new_path = copy.copy(cur_path)
+                new_path.append(out_node)
+
+                # Get additional variants
+                additional_variants = out_node.get_downstream_stop_altering_variants()
+                new_path.add_additional_variants(additional_variants)
+
+                queue.append(new_path)
+
+        return paths
+
     def add_peptide_sequences(self, node:PVGNode, orfs:List[PVGOrf],
             cleavage_params:CleavageParams, check_variants:bool, is_start_codon:bool,
             additional_variants:List[VariantRecord], denylist:Set[str],
@@ -1070,7 +1209,16 @@ class PVGPeptideFinder():
                 subgraphs=subgraphs, is_circ_rna=circ_rna is not None,
                 backsplicing_only=backsplicing_only
             )
-        else:
+        elif self.mode == 'sliding_window':
+            candidate_paths = self.find_candidate_node_paths_sliding_window(
+                node=node, orfs=orfs, cleavage_params=cleavage_params,
+                tx_id=self.tx_id, gene_id=self.gene_id, leading_node=leading_node,
+                subgraphs=subgraphs, is_circ_rna=circ_rna is not None,
+                backsplicing_only=backsplicing_only,
+                min_length=cleavage_params.min_length,
+                max_length=cleavage_params.max_length
+            )
+        else:  # archipel
             candidate_paths = self.find_candidate_node_paths_archipel(
                 node=node, orfs=orfs, cleavage_params=cleavage_params,
                 tx_id=self.tx_id, gene_id=self.gene_id, leading_node=leading_node,

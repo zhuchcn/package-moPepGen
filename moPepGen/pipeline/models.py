@@ -149,6 +149,10 @@ class CallVariantDispatch:
         timeout_seconds: Maximum time allowed for processing this transcript.
             If exceeded, the transcript is retried with step-down parameters or
             skipped if skip_failed is True.
+        mode: Peptide finding mode ('misc', 'archipel', or 'sliding_window'). Controls
+            which path-finding algorithm is used: 'misc' for enzyme-based cleavage,
+            'archipel' for variant islands with flanking, 'sliding_window' for
+            comprehensive 8-11mer enumeration.
     """
     tx_id: str
     variant_series: Any  # VariantSeriesGroup (loosely typed to avoid imports)
@@ -162,6 +166,7 @@ class CallVariantDispatch:
     limits: Limits
     save_graph: bool
     timeout_seconds: int
+    mode: str = 'misc'
 
 @dataclass
 class CallResult:

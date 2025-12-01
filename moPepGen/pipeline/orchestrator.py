@@ -158,6 +158,7 @@ def _process_with_stepdown(dispatch: CallVariantDispatch):
         'coding_novel_orf': dispatch.flags.coding_novel_orf,
         'skip_failed': dispatch.flags.skip_failed,
         'timeout': dispatch.timeout_seconds,
+        'mode': dispatch.mode,
     }
     tracer = TimeoutTracer()
     base_kwargs['tracer'] = tracer
@@ -225,6 +226,8 @@ class CallVariantOrchestrator:
         self.output_path = args.output_path
         self.graph_output_dir = args.graph_output_dir
         self.threads = args.threads
+        # Convert CLI hyphenated mode to internal underscore format
+        self.mode = args.peptide_finding_mode.replace('-', '_')
         self.logger = get_logger()
         self.reference_data = reference_data  # Can be provided or loaded later
 
@@ -379,6 +382,7 @@ class CallVariantOrchestrator:
             limits=self.limits,
             save_graph=self.graph_output_dir is not None,
             timeout_seconds=self.args.timeout_seconds,
+            mode=self.mode,
         )
 
     def run(self):

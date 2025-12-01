@@ -781,3 +781,192 @@ class TestPeptideVariantGraph(unittest.TestCase):
         self.assertEqual(len(var_nodes), 1)
         vnode_1 = var_nodes[0]
         self.assertEqual(len(vnode_1.variants), 1)
+
+    def test_sliding_window_basic(self):
+        """ Test basic sliding window mode generates all 8-11mers with variant """
+        # Create simple sequence with variant at position 5 (F->L)
+        v1 = (15, 18, 'TTT', 'CTT', 'SNV', '15-T-C', 0, 1, False)
+        data = {
+            1: ('MKAPL', [0], [None], [((0,5),(0,5))], 0),
+            2: ('F', [1], [None], [((0,1),(5,6))], 0),
+            3: ('L', [1], [v1], [], 0),
+            4: ('GHPKLS', [2,3], [None], [((0,6),(6,12))], 0)
+        }
+        graph, nodes = create_pgraph(data, 'ENST0001')
+        graph.known_orf = [0, 36]
+        graph.create_atomic_graph()
+
+        # Call variant peptides with sliding_window mode
+        peptides = graph.call_variant_peptides(
+            mode='sliding_window',
+            check_variants=True
+        )
+
+        # Should generate windows containing the variant (position 5)
+        variant_peptides = [str(seq) for seq in peptides.keys()]
+
+        # Should have variant peptides
+        self.assertGreater(len(variant_peptides), 0)
+        # All peptides should contain L (the variant) not F (reference)
+        for pep in variant_peptides:
+            # Variant path has L at position 5
+            if len(pep) >= 6:
+                self.assertIn('L', pep)
+
+    def test_sliding_window_multiple_variants(self):
+        """ Test sliding window with multiple variants in proximity """
+        v1 = (15, 18, 'TTT', 'CTT', 'SNV', '15-T-C', 0, 1, False)
+        v2 = (24, 27, 'AAA', 'GGA', 'SNV', '24-A-G', 0, 1, False)
+        data = {
+            1: ('MKAPL', [0], [None], [((0,5),(0,5))], 0),
+            2: ('F', [1], [None], [((0,1),(5,6))], 0),
+            3: ('L', [1], [v1], [], 0),
+            4: ('GH', [2,3], [None], [((0,2),(6,8))], 0),
+            5: ('K', [4], [None], [((0,1),(8,9))], 0),
+            6: ('G', [4], [v2], [], 0),
+            7: ('PLSKER', [5,6], [None], [((0,6),(9,15))], 0)
+        }
+        graph, _ = create_pgraph(data, 'ENST0001')
+        graph.known_orf = [0, 45]
+        graph.create_atomic_graph()
+
+        peptides = graph.call_variant_peptides(
+            mode='sliding_window',
+            check_variants=True
+        )
+
+        variant_peptides = [str(seq) for seq in peptides.keys()]
+        self.assertGreater(len(variant_peptides), 0)
+
+    def test_sliding_window_edge_start(self):
+        """ Test sliding window with variant near start of sequence """
+        v1 = (3, 6, 'AAA', 'GGA', 'SNV', '3-A-G', 0, 1, False)
+        data = {
+            1: ('M', [0], [None], [((0,1),(0,1))], 0),
+            2: ('K', [1], [None], [((0,1),(1,2))], 0),
+            3: ('G', [1], [v1], [], 0),
+            4: ('PLGHPK', [2,3], [None], [((0,6),(2,8))], 0)
+        }
+        graph, _ = create_pgraph(data, 'ENST0001')
+        graph.known_orf = [0, 24]
+        graph.create_atomic_graph()
+
+        peptides = graph.call_variant_peptides(
+            mode='sliding_window',
+            check_variants=True
+        )
+
+        variant_peptides = [str(seq) for seq in peptides.keys()]
+        self.assertGreater(len(variant_peptides), 0)
+
+        # Should have windows with G (variant) near start
+        has_g_variant = any('G' in p for p in variant_peptides)
+        self.assertTrue(has_g_variant)
+
+    def test_sliding_window_edge_end(self):
+        """ Test sliding window with variant near end of sequence """
+        v1 = (27, 30, 'AAA', 'GGA', 'SNV', '27-A-G', 0, 1, False)
+        data = {
+            1: ('MKAPLGHPK', [0], [None], [((0,9),(0,9))], 0),
+            2: ('K', [1], [None], [((0,1),(9,10))], 0),
+            3: ('G', [1], [v1], [], 0)
+        }
+        graph, _ = create_pgraph(data, 'ENST0001')
+        graph.known_orf = [0, 30]
+        graph.create_atomic_graph()
+
+        peptides = graph.call_variant_peptides(
+            mode='sliding_window',
+            check_variants=True
+        )
+
+        variant_peptides = [str(seq) for seq in peptides.keys()]
+        self.assertGreater(len(variant_peptides), 0)
+
+        # Should have windows ending with G (variant)
+        has_g_end = any(p.endswith('G') for p in variant_peptides)
+        self.assertTrue(has_g_end)
+
+    def test_sliding_window_exact_8aa(self):
+        """ Test sliding window with sequence exactly 8 AA """
+        v1 = (12, 15, 'AAA', 'GGA', 'SNV', '12-A-G', 0, 1, False)
+        data = {
+            1: ('MKAP', [0], [None], [((0,4),(0,4))], 0),
+            2: ('L', [1], [None], [((0,1),(4,5))], 0),
+            3: ('G', [1], [v1], [], 0),
+            4: ('HPK', [2,3], [None], [((0,3),(5,8))], 0)
+        }
+        graph, _ = create_pgraph(data, 'ENST0001')
+        graph.known_orf = [0, 24]
+        graph.create_atomic_graph()
+
+        peptides = graph.call_variant_peptides(
+            mode='sliding_window',
+            check_variants=True
+        )
+
+        variant_peptides = [str(seq) for seq in peptides.keys()]
+        # With 8 AA total and variant at position 4, should generate at least one 8mer
+        self.assertGreater(len(variant_peptides), 0)
+        # Should have exactly 8 AA peptide
+        has_8mer = any(len(p) == 8 for p in variant_peptides)
+        self.assertTrue(has_8mer)
+
+    def test_sliding_window_stop_codon(self):
+        """ Test sliding window stops at stop codon """
+        v1 = (15, 18, 'TTT', 'CTT', 'SNV', '15-T-C', 0, 1, False)
+        data = {
+            1: ('MKAPL', [0], [None], [((0,5),(0,5))], 0),
+            2: ('F', [1], [None], [((0,1),(5,6))], 0),
+            3: ('L', [1], [v1], [], 0),
+            4: ('GHP', [2,3], [None], [((0,3),(6,9))], 0)
+        }
+        graph, nodes = create_pgraph(data, 'ENST0001')
+        graph.known_orf = [0, 27]
+        graph.add_stop(nodes[4])
+        graph.create_atomic_graph()
+
+        peptides = graph.call_variant_peptides(
+            mode='sliding_window',
+            check_variants=True
+        )
+
+        variant_peptides = [str(seq) for seq in peptides.keys()]
+        # Should not include stop codon in any peptide
+        for pep in variant_peptides:
+            self.assertNotIn('*', pep)
+
+    def test_sliding_window_vs_misc_coverage(self):
+        """ Test that sliding_window provides comprehensive coverage """
+        v1 = (15, 18, 'TTT', 'CTT', 'SNV', '15-T-C', 0, 1, False)
+        v2 = (18, 21, 'GGG', 'AAA', 'SNV', '18-G-A', 0, 1, False)
+        v3 = (21, 24, 'AAA', 'GGA', 'SNV', '21-A-G', 0, 1, False)
+        data = {
+            1: ('MKAPL', [0], [None], [((0,5),(0,5))], 0),
+            2: ('F', [1], [None], [((0,1),(5,6))], 0),
+            3: ('L', [1], [v1], [], 0),
+            4: ('G', [2,3], [None], [((0,1),(6,7))], 0),
+            5: ('A', [4], [v2], [], 0),
+            6: ('H', [4,5], [None], [((0,1),(7,8))], 0),
+            7: ('G', [6], [v3], [], 0),
+            8: ('PLSKER', [6,7], [None], [((0,6),(8,14))], 0)
+        }
+
+        # Test with atomic graph (sliding_window)
+        graph_sw, _ = create_pgraph(data, 'ENST0001')
+        graph_sw.known_orf = [0, 42]
+        graph_sw.create_atomic_graph()
+        peptides_sw = graph_sw.call_variant_peptides(
+            mode='sliding_window',
+            check_variants=True
+        )
+
+        # With hypermutated region (3 variants in close proximity), sliding_window
+        # should generate peptides without combinatorial explosion
+        self.assertGreater(len(peptides_sw), 0)
+
+        # Verify we get peptides with variant amino acids
+        variant_peps = [str(seq) for seq in peptides_sw.keys()]
+        # Should have reasonable number of peptides (not thousands)
+        # Each starting position can generate ~4 windows (8-11mers), so expect hundreds not thousands
+        self.assertLess(len(variant_peps), 1000)

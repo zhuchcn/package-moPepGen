@@ -721,6 +721,35 @@ class PeptideVariantGraph():
                 if out_node.id not in visited:
                     queue.appendleft(out_node)
 
+    def create_atomic_graph(self) -> None:
+        """
+        Create an atomic graph where ALL nodes (both reference and variant) are
+        split into single amino acids. This is optimal for sliding window mode
+        as it allows simple consecutive node walking without truncation logic.
+
+        Unlike islands_graph which keeps variant nodes as multi-AA islands, this
+        splits everything to atomic (1 AA) units for maximum simplicity.
+        """
+        queue = deque([self.root])
+        visited:Set[str] = set()
+        while queue:
+            cur = queue.pop()
+            if cur.id in visited:
+                continue
+            if cur is self.stop:
+                continue
+            if cur.seq is None:
+                for out_node in cur.out_nodes:
+                    queue.appendleft(out_node)
+                continue
+
+            # Split ALL nodes into single amino acids
+            nodes = cur.split_node_atomic()
+            visited.update([x.id for x in nodes])
+            for out_node in nodes[-1].out_nodes:
+                if out_node.id not in visited:
+                    queue.appendleft(out_node)
+
     def collapse_ref_nodes(self) -> None:
         """
         Traverse through the graph and collapse reference nodes with the same
