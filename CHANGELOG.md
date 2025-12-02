@@ -10,6 +10,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.5.0] - 2025-12-02
+
 ## [1.5.0-rc3] - 2025-10-28
 
 - Refactor `callVariant` to split the single script into seperate modules under `pipeline`.
