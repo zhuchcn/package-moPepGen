@@ -37,3 +37,4 @@ jobs:
             type=raw,enable=${{github.event_name == 'workflow_dispatch'}},branch=unstable,value=unstable
           # Uncomment if you expect to use non-SemVer release tags
           # non-semver-tags: true
+          organization: zhuchcn
