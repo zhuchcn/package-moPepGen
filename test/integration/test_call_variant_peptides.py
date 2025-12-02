@@ -43,9 +43,9 @@ def create_base_args() -> argparse.Namespace:
     args.cleavage_rule = 'trypsin'
     args.cleavage_exception = None
     args.miscleavage = '2'
-    args.min_mw = '500.'
-    args.min_length = 7
-    args.max_length = 25
+    args.min_mw = None
+    args.min_length = None
+    args.max_length = None
     args.flanking_size = 10
     args.quiet = True
     args.debug_level = 1
@@ -1488,4 +1488,19 @@ class TestCallVariantPeptides(TestCaseIntegration):
         self.default_test_case(gvf, reference, expected, {
             'cleavage_rule': 'None',
             'peptide_finding_mode': 'archipel'
+        })
+
+    def test_call_variant_peptide_sliding_window_case_1(self):
+        """
+        Test callVariant with --cleavage-rule None. Example data provided by lyl
+        """
+        test_dir = self.data_dir/'lyl/case_1'
+        gvf = [
+            test_dir/'muttable.gvf'
+        ]
+        expected = test_dir/'expected-sliding_window.txt'
+        reference = test_dir
+        self.default_test_case(gvf, reference, expected, {
+            'cleavage_rule': 'None',
+            'peptide_finding_mode': 'sliding-window'
         })

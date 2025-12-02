@@ -90,7 +90,7 @@ class TestCasePVGPeptideFinder(unittest.TestCase):
         orf = PVGOrf(orf = [0, 7])
         graph, nodes = create_pgraph(data, 'ENST0001')
         finder = PVGPeptideFinder(tx_id)
-        cp = params.CleavageParams(flanking_size=3)
+        cp = params.CleavageParams(flanking_size=3, peptide_finding_mode='archipel')
         paths = finder.find_candidate_node_paths_archipel(
             node=nodes[1], orfs=[orf], cleavage_params=cp,
             tx_id=tx_id, gene_id=gene_id, leading_node=None, subgraphs=graph.subgraphs,
@@ -125,7 +125,7 @@ class TestCasePVGPeptideFinder(unittest.TestCase):
         orf = PVGOrf(orf = [0, 7])
         graph, nodes = create_pgraph(data, 'ENST0001')
         finder = PVGPeptideFinder(tx_id)
-        cp = params.CleavageParams(flanking_size=3)
+        cp = params.CleavageParams(flanking_size=3, peptide_finding_mode='archipel')
         paths = finder.find_candidate_node_paths_archipel(
             node=nodes[1], orfs=[orf], cleavage_params=cp,
             tx_id=tx_id, gene_id=gene_id, leading_node=None, subgraphs=graph.subgraphs,
@@ -160,7 +160,7 @@ class TestCasePVGPeptideFinder(unittest.TestCase):
         orf = PVGOrf(orf = [0, 7])
         graph, nodes = create_pgraph(data, 'ENST0001')
         finder = PVGPeptideFinder(tx_id)
-        cp = params.CleavageParams(flanking_size=3)
+        cp = params.CleavageParams(flanking_size=3, peptide_finding_mode='archipel')
         paths = finder.find_candidate_node_paths_archipel(
             node=nodes[1], orfs=[orf], cleavage_params=cp,
             tx_id=tx_id, gene_id=gene_id, leading_node=None, subgraphs=graph.subgraphs,
@@ -275,7 +275,7 @@ class TestCasePVGPeptideFinder(unittest.TestCase):
             n.global_variant = variant_1
 
         finder = PVGPeptideFinder(tx_id)
-        cp = params.CleavageParams(flanking_size=3)
+        cp = params.CleavageParams(flanking_size=3, peptide_finding_mode='archipel')
         paths = finder.find_candidate_node_paths_archipel(
             node=nodes[1].copy(id=True), orfs=[orf], cleavage_params=cp,
             tx_id=tx_id, gene_id=gene_id, leading_node=None, subgraphs=graph.subgraphs,

@@ -153,7 +153,6 @@ def add_args_cleavage(parser:argparse.ArgumentParser, enzyme_only:bool=False):
         '-w', '--min-mw',
         type=float,
         help='The minimal molecular weight of the non-canonical peptides.',
-        default=500.,
         metavar='<number>'
     )
     group.add_argument(

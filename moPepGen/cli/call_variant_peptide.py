@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from moPepGen.cli import common
-from moPepGen import params
+from moPepGen import params, constant
 from moPepGen.pipeline.orchestrator import CallVariantOrchestrator
 
 INPUT_FILE_FORMATS = ['.gvf']
@@ -167,7 +167,7 @@ def call_variant_peptide(args: argparse.Namespace) -> None:
         enzyme=args.cleavage_rule,
         exception=args.cleavage_exception,
         miscleavage=int(args.miscleavage),
-        min_mw=float(args.min_mw),
+        min_mw=args.min_mw,
         min_length=args.min_length,
         max_length=args.max_length,
         max_variants_per_node=args.max_variants_per_node[0],
@@ -176,16 +176,13 @@ def call_variant_peptide(args: argparse.Namespace) -> None:
         min_nodes_to_collapse=args.min_nodes_to_collapse,
         naa_to_collapse=args.naa_to_collapse,
         flanking_size=args.flanking_size,
+        peptide_finding_mode= args.peptide_finding_mode
     )
 
-    # Adjust parameters for enzyme=None (immunopeptidomics/neoantigen calling)
-    if cleavage_params.enzyme is None:
-        cleavage_params.max_length = float('inf')
-        cleavage_params.min_length = cleavage_params.flanking_size
-        cleavage_params.min_mw = 0
-        load_canonical_peptides = False
-    else:
+    if cleavage_params.peptide_finding_mode == constant.PeptideFindingMode.MISC.value:
         load_canonical_peptides = True
+    else:
+        load_canonical_peptides = False
 
     # Load references in the CLI layer
     reference_data = common.load_references(

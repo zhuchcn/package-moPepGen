@@ -6,7 +6,7 @@ import copy
 from typing import Deque, Dict, Iterable, List, Set, Tuple, TYPE_CHECKING
 from Bio.Seq import Seq
 from Bio import SeqUtils
-from moPepGen import aa, get_equivalent, seqvar
+from moPepGen import aa, get_equivalent, seqvar, constant
 from moPepGen.SeqFeature import FeatureLocation
 from moPepGen.svgraph.PVGNode import PVGNode
 from moPepGen.svgraph.PVGOrf import PVGOrf
@@ -824,15 +824,13 @@ class PVGPeptideFinder():
           every node. This is useful for PVG derived from a circRNA, and this
           argument is the circRNA variant.
     """
-    PEPTIDE_FINDING_MODES = ['misc', 'archipel', 'sliding_window']
-
     def __init__(self, tx_id:str, peptides:TypeVariantPeptideMetadataMap=None,
             seqs:Set[Seq]=None, labels:Dict[str,int]=None, mode:str='misc',
             global_variant:VariantRecord=None, gene_id:str=None,
             truncate_sec:bool=False, w2f:bool=False, check_external_variants:bool=True,
             cleavage_params:CleavageParams=None, check_orf:bool=False):
         """ constructor """
-        assert mode in self.PEPTIDE_FINDING_MODES
+        assert mode in [m.value for m in constant.PeptideFindingMode]
         self.tx_id = tx_id
         self.peptides = peptides or {}
         self.mode = mode

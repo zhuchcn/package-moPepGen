@@ -227,8 +227,7 @@ class CallVariantOrchestrator:
         self.output_path = args.output_path
         self.graph_output_dir = args.graph_output_dir
         self.threads = args.threads
-        # Convert CLI hyphenated mode to internal underscore format
-        self.mode = args.peptide_finding_mode.replace('-', '_')
+        self.mode = cleavage_params.peptide_finding_mode
         self.logger = get_logger()
         self.reference_data = reference_data  # Can be provided or loaded later
 
