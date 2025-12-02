@@ -1,0 +1,13 @@
+##fileformat=VCFv4.2
+##mopepgen_version=1.4.6-rc4
+##parser=parseVEP
+##reference_index=/nemo/lab/swantonc/working/liul/moPepGen/ref/hg19/gencode_47/index
+##genome_fasta=
+##annotation_gtf=
+##source=muttable
+##CHROM=<Description="Gene ID">
+##INFO=<ID=TRANSCRIPT_ID,Number=1,Type=String,Description="Transcript ID">
+##INFO=<ID=GENE_SYMBOL,Number=1,Type=String,Description="Gene Symbol">
+##INFO=<ID=GENOMIC_POSITION,Number=1,Type=String,Description="Genomic Position">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+ENSG00000152942.19_16	4690	INDEL-4690-A-AT	A	AT	.	.	TRANSCRIPT_ID=ENST00000361732.6_5;GENOMIC_POSITION=5:68669809-68669810;GENE_SYMBOL=RAD17
