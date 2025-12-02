@@ -31,7 +31,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: uclahs-cds/tool-Docker-action@v2.1.0
+      - uses: zhuchcn/tool-Docker-action@v2.1.0
         with:
           custom-tags: |
             type=raw,enable=${{github.event_name == 'workflow_dispatch'}},branch=unstable,value=unstable
