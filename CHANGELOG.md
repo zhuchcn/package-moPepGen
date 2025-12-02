@@ -10,9 +10,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
-### Added
+### [1.5.1-rc1] - 2025-12-02
 
-- Added `--peptide-finding-mode` option to `callVariant` with support for `misc`, `archipel`, and `sliding-window` modes for variant peptide discovery
+- Add `--peptide-finding-mode` option to `callVariant` with support for `misc`, `archipel`, and `sliding-window` modes for variant peptide discovery.
+- Add new argument `--flanking-size` for `archipel` mode.
+- Major refactoring: VariantPeptideDict → PVGPeptideFinder, MiscleavedNodes → PVGCandidateNodePaths
+- New graph construction methods: create_islands_graph() and create_atomic_graph()
+- Support for --cleavage-rule None in index generation
 
 ### Fixed
 
