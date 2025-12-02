@@ -6,7 +6,6 @@ from collections import deque
 
 
 if TYPE_CHECKING:
-    from Bio.Seq import Seq
     from moPepGen.circ.CircRNA import CircRNAModel
     from moPepGen.svgraph.PVGNode import PVGNode
     from moPepGen.svgraph.PVGOrf import PVGOrf
