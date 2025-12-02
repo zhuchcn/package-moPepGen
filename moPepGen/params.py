@@ -6,7 +6,7 @@ from moPepGen import aa, constant
 
 
 if TYPE_CHECKING:
-    from typing import Set, Dict, List, Tuple
+    from typing import Set, Dict, List
     from moPepGen import dna, gtf
 
 
