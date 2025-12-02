@@ -172,7 +172,7 @@ def add_args_cleavage(parser:argparse.ArgumentParser, enzyme_only:bool=False):
         type=int,
         default=10,
         help='Flanking size for no enzymatic cleavage.',
-        metavar='<number?'
+        metavar='<number>'
     )
 
 def add_args_decoy(parser:argparse.ArgumentParser):

@@ -756,7 +756,7 @@ class PVGNode():
         return nodes
 
     def collapse_identical_downstreams(self) -> None:
-        """ Collapse downstream ndoes that are identifical """
+        """ Collapse downstream nodes that are identical """
         node_map:Dict[Tuple,List[PVGNode]] = {}
         for out_node in self.out_nodes:
             key = (
