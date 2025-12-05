@@ -43,16 +43,44 @@ def create_base_args() -> argparse.Namespace:
     args.cleavage_rule = 'trypsin'
     args.cleavage_exception = None
     args.miscleavage = '2'
-    args.min_mw = '500.'
-    args.min_length = 7
-    args.max_length = 25
+    args.min_mw = None
+    args.min_length = None
+    args.max_length = None
+    args.flanking_size = 10
     args.quiet = True
     args.debug_level = 1
     args.noncanonical_transcripts = False
     args.invalid_protein_as_noncoding = False
+    args.find_novel_orfs = True
     args.threads = 1
     args.timeout_seconds = 1800
     args.skip_failed = False
+    args.peptide_finding_mode = 'misc'
+    return args
+
+def create_args_generate_index(work_dir:Path, data_dir:Path) -> argparse.Namespace:
+    """ Generate args for generate_index """
+    args = argparse.Namespace()
+    args.command = 'generateIndex'
+    args.genome_fasta = data_dir/'genome.fasta'
+    args.annotation_gtf = data_dir/'annotation.gtf'
+    args.proteome_fasta = data_dir/'translate.fasta'
+    args.codon_table = 'Standard'
+    args.chr_codon_table = ['chrM:SGC1']
+    args.start_codons = ['ATG']
+    args.chr_start_codons = ['chrM:ATG,ATA,ATT']
+    args.gtf_symlink = False
+    args.reference_source = None
+    args.invalid_protein_as_noncoding = False
+    args.cleavage_rule = 'trypsin'
+    args.cleavage_exception = 'trypsin_exception'
+    args.min_mw = 500.
+    args.min_length = 7
+    args.max_length = 25
+    args.miscleavage = 2
+    args.quiet = True
+    args.force = False
+    args.output_dir = work_dir/'index'
     return args
 
 class TestCallVariantPeptides(TestCaseIntegration):
@@ -133,7 +161,11 @@ class TestCallVariantPeptides(TestCaseIntegration):
     def test_call_variant_peptide_case1(self):
         """ Test variant peptide calling """
         args = create_base_args()
-        args.input_path = [self.data_dir/'vep'/'vep_gSNP.gvf']
+        args.input_path = [
+            self.data_dir/'vep'/'vep_gSNP.gvf',
+            self.data_dir/'vep'/'vep_gINDEL.gvf',
+            self.data_dir/'fusion/star_fusion.gvf'
+        ]
         args.output_path = self.work_dir/'vep_moPepGen.fasta'
         args.genome_fasta = self.data_dir/'genome.fasta'
         args.annotation_gtf = self.data_dir/'annotation.gtf'
@@ -141,6 +173,51 @@ class TestCallVariantPeptides(TestCaseIntegration):
         cli.call_variant_peptide(args)
         files = {str(file.name) for file in self.work_dir.glob('*')}
         expected = {'vep_moPepGen.fasta', 'vep_moPepGen_peptide_table.txt'}
+        self.assertEqual(files, expected)
+
+    def test_call_variant_peptide_archipel(self):
+        """ Enzyme None """
+        args = create_base_args()
+        args.input_path = [
+            self.data_dir/'vep/vep_gSNP.gvf',
+            self.data_dir/'vep/vep_gINDEL.gvf',
+            self.data_dir/'alternative_splicing/alternative_splicing.gvf',
+            self.data_dir/'fusion/star_fusion.gvf'
+        ]
+        args.output_path = self.work_dir/'vep_moPepGen.fasta'
+        args.genome_fasta = self.data_dir/'genome.fasta'
+        args.annotation_gtf = self.data_dir/'annotation.gtf'
+        args.proteome_fasta = self.data_dir/'translate.fasta'
+        args.invalid_protein_as_noncoding = True
+        args.cleavage_rule = 'None'
+        cli.call_variant_peptide(args)
+        files = {str(file.name) for file in self.work_dir.glob('*')}
+        expected = {'vep_moPepGen.fasta', 'vep_moPepGen_peptide_table.txt'}
+        self.assertEqual(files, expected)
+
+    def test_call_variant_peptide_case1_with_index(self):
+        """ Test case for peptide calling with index """
+        # Test index works
+        args = create_base_args()
+        args.input_path = [
+            self.data_dir/'vep/vep_gSNP.gvf',
+            self.data_dir/'vep/vep_gINDEL.gvf',
+            self.data_dir/'alternative_splicing/alternative_splicing.gvf',
+            self.data_dir/'fusion/star_fusion.gvf'
+        ]
+        args.output_path = self.work_dir/'vep_moPepGen.fasta'
+        args.genome_fasta = self.data_dir/'genome.fasta'
+        args.annotation_gtf = self.data_dir/'annotation.gtf'
+        args.proteome_fasta = self.data_dir/'translate.fasta'
+        args.invalid_protein_as_noncoding = True
+        args.cleavage_rule = 'None'
+
+        args2 = create_args_generate_index(self.work_dir, self.data_dir)
+        cli.generate_index(args2)
+        args.index_dir = args2.output_dir
+        cli.call_variant_peptide(args)
+        files = {str(file.name) for file in self.work_dir.glob('*')}
+        expected = {'index', 'vep_moPepGen.fasta', 'vep_moPepGen_peptide_table.txt'}
         self.assertEqual(files, expected)
 
     def test_call_variant_peptide_case1_sect_and_w2f(self):
@@ -1397,3 +1474,33 @@ class TestCallVariantPeptides(TestCaseIntegration):
         expected = test_dir/'brute_force.txt'
         reference = test_dir
         self.default_test_case(gvf, reference, expected)
+
+    def test_call_variant_peptide_archipel_case_1(self):
+        """
+        Test callVariant with --cleavage-rule None. Example data provided by lyl
+        """
+        test_dir = self.data_dir/'lyl/case_1'
+        gvf = [
+            test_dir/'muttable.gvf'
+        ]
+        expected = test_dir/'expected.txt'
+        reference = test_dir
+        self.default_test_case(gvf, reference, expected, {
+            'cleavage_rule': 'None',
+            'peptide_finding_mode': 'archipel'
+        })
+
+    def test_call_variant_peptide_sliding_window_case_1(self):
+        """
+        Test callVariant with --cleavage-rule None. Example data provided by lyl
+        """
+        test_dir = self.data_dir/'lyl/case_1'
+        gvf = [
+            test_dir/'muttable.gvf'
+        ]
+        expected = test_dir/'expected-sliding_window.txt'
+        reference = test_dir
+        self.default_test_case(gvf, reference, expected, {
+            'cleavage_rule': 'None',
+            'peptide_finding_mode': 'sliding-window'
+        })

@@ -104,8 +104,8 @@ def call_novel_orf_peptide(args: argparse.Namespace) -> None:
     cleavage_params = params.CleavageParams(
         enzyme=args.cleavage_rule,
         exception=args.cleavage_exception,
-        miscleavage=int(args.miscleavage),
-        min_mw=float(args.min_mw),
+        miscleavage=args.miscleavage,
+        min_mw=args.min_mw,
         min_length=args.min_length,
         max_length=args.max_length
     )

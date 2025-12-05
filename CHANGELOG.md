@@ -10,6 +10,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### [1.5.1-rc1] - 2025-12-02
+
+- Add `--peptide-finding-mode` option to `callVariant` with support for `misc`, `archipel`, and `sliding-window` modes for variant peptide discovery.
+
+- Add new argument `--flanking-size` for `archipel` mode.
+
+- Major refactoring: VariantPeptideDict → PVGPeptideFinder, MiscleavedNodes → PVGCandidateNodePaths
+
+- New graph construction methods: create_islands_graph() and create_atomic_graph()
+
+- Support for --cleavage-rule None in index generation
+
+- Fixed `generateIndex` and `updateIndex` to support `--cleavage-rule None` #927
+
 ## [1.5.0] - 2025-12-02
 
 ## [1.5.0-rc3] - 2025-10-28
@@ -25,6 +39,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Fix `parseRMATS` to also filter for ijc_sample_1 and sjc_sample_2. #939
 
 - Added test case for `parseRMATS` SE with comma seperated values for ijc_sample_1, ijc_sample_2, sjc_sample_1, and sjc_sample_2. #939
+
+## [1.5.0-rc2] - 2025-06-21
 
 - Add `--in-bubble-cap-step-down` to `callVariant` for TVG in case of hypermutated regions.
 

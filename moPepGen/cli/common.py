@@ -131,7 +131,7 @@ def add_args_cleavage(parser:argparse.ArgumentParser, enzyme_only:bool=False):
         help='Enzymatic cleavage rule.',
         default='trypsin',
         metavar='<value>',
-        choices=list(EXPASY_RULES.keys())
+        choices=list(EXPASY_RULES.keys()) + ['None']
     )
     group.add_argument(
         '--cleavage-exception',
@@ -153,21 +153,25 @@ def add_args_cleavage(parser:argparse.ArgumentParser, enzyme_only:bool=False):
         '-w', '--min-mw',
         type=float,
         help='The minimal molecular weight of the non-canonical peptides.',
-        default=500.,
         metavar='<number>'
     )
     group.add_argument(
         '-l', '--min-length',
         type=int,
         help='The minimal length of non-canonical peptides, inclusive.',
-        default=7,
         metavar='<number>'
     )
     group.add_argument(
         '-x', '--max-length',
         type=int,
         help='The maximum length of non-canonical peptides, inclusive.',
-        default=25,
+        metavar='<number>'
+    )
+    group.add_argument(
+        '--flanking-size',
+        type=int,
+        default=10,
+        help='Flanking size for no enzymatic cleavage.',
         metavar='<number>'
     )
 
@@ -262,7 +266,7 @@ def add_args_source(parser:argparse.ArgumentParser):
     )
 
 def load_references(args:argparse.Namespace, load_genome:bool=True,
-        load_canonical_peptides:bool=True, load_proteome:bool=False,
+        load_canonical_peptides:bool=True, load_proteome:bool=True,
         invalid_protein_as_noncoding:bool=False, check_protein_coding:bool=False,
         load_codon_tables:bool=False, cleavage_params:CleavageParams=None
         ) -> ReferenceData:
@@ -271,7 +275,7 @@ def load_references(args:argparse.Namespace, load_genome:bool=True,
     logger = get_logger()
     genome = None
     anno = None
-    canonical_peptides = None
+    canonical_peptides = set()
     if invalid_protein_as_noncoding:
         load_proteome = True
 
@@ -290,8 +294,7 @@ def load_references(args:argparse.Namespace, load_genome:bool=True,
         if load_proteome:
             proteome = index_dir.load_proteome()
 
-        if invalid_protein_as_noncoding:
-            anno.check_protein_coding(proteome, True)
+        anno.check_protein_coding(proteome, True)
 
         logger.info('Reference indices loaded.')
 
@@ -310,6 +313,7 @@ def load_references(args:argparse.Namespace, load_genome:bool=True,
             proteome.dump_fasta(args.proteome_fasta, source=args.reference_source)
             logger.info('Proteome FASTA loaded.')
             anno.check_protein_coding(proteome, invalid_protein_as_noncoding)
+            anno.check_protein_coding(proteome, True)
 
         if load_genome:
             genome = dna.DNASeqDict()
@@ -317,16 +321,14 @@ def load_references(args:argparse.Namespace, load_genome:bool=True,
             logger.info('Genome assembly FASTA loaded.')
 
         if load_canonical_peptides:
-            rule:str = args.cleavage_rule
-            miscleavage:int = int(args.miscleavage)
-            min_mw:float = float(args.min_mw)
-            exception = args.cleavage_exception
-            min_length:int = args.min_length
-            max_length:int = args.max_length
             canonical_peptides = proteome.create_unique_peptide_pool(
-                anno=anno, rule=rule, exception=exception,
-                miscleavage=miscleavage, min_mw=min_mw, min_length=min_length,
-                max_length=max_length
+                anno=anno,
+                rule=cleavage_params.enzyme,
+                exception=cleavage_params.exception,
+                miscleavage=cleavage_params.miscleavage,
+                min_mw=cleavage_params.min_mw,
+                min_length=cleavage_params.min_length,
+                max_length=cleavage_params.max_length
             )
             logger.info('canonical peptide pool generated.')
 

@@ -6,7 +6,7 @@ import copy
 from typing import Deque, Dict, Iterable, List, Set, Tuple, TYPE_CHECKING
 from Bio.Seq import Seq
 from Bio import SeqUtils
-from moPepGen import aa, get_equivalent, seqvar
+from moPepGen import aa, get_equivalent, seqvar, constant
 from moPepGen.SeqFeature import FeatureLocation
 from moPepGen.svgraph.PVGNode import PVGNode
 from moPepGen.svgraph.PVGOrf import PVGOrf
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from moPepGen.params import CleavageParams
     from moPepGen.circ import CircRNAModel
 
-class VariantPeptideMetadata():
+class PVGPeptideMetadata():
     """ Variant peptide metadata """
     def __init__(self, label:str=None, orf:Tuple[int,int]=None,
             is_pure_circ_rna:bool=False, has_variants:bool=False,
@@ -133,20 +133,32 @@ class AnnotatedPeptideLabel:
         """ to line """
         return [f"{self.label}\t{seg.to_line()}" for seg in self.segments]
 
-class MiscleavedNodeSeries():
+class PVGNodePath():
     """ Helper class when calling for miscleavage peptides. The nodes contained
     by this class can be joined to make a miscleavage peptide. """
-    def __init__(self, nodes:List[PVGNode], additional_variants:Set[VariantRecord]):
+    def __init__(self, nodes:List[PVGNode], additional_variants:Set[VariantRecord],
+            global_variants:Set[VariantRecord]=None):
         """ Constructor """
         self.nodes = nodes
         self.additional_variants = additional_variants
+        self.global_variants = global_variants or set()
         self._len = None
+        self._variants:Dict[str, VariantRecord] = None
 
     def __len__(self) -> int:
         """ Get length of node sequences """
         if self._len is None:
             self._len = sum(len(x.seq.seq) for x in self.nodes)
         return self._len
+
+    def __copy__(self) -> PVGNodePath:
+        """ copy """
+        new_path = PVGNodePath(
+            nodes=copy.copy(self.nodes),
+            additional_variants=copy.copy(self.additional_variants)
+        )
+        new_path._len = self._len
+        return new_path
 
     def is_too_short(self, param:CleavageParams) -> bool:
         """ Checks whether the sequence is too short """
@@ -173,9 +185,224 @@ class MiscleavedNodeSeries():
                 return True
         return False
 
-TypeVariantPeptideMetadataMap = Dict[Seq, Dict[str, VariantPeptideMetadata]]
+    @property
+    def variants(self):
+        """ Gather variants from node path """
+        if self._variants is None:
+            self._variants = self.gather_variants()
+        return self._variants
 
-class MiscleavedNodes():
+    def gather_variants(self) -> Dict[str, VariantRecord]:
+        """ Gather variants """
+        variants:Dict[str, VariantRecord] = {}
+        for n in self.nodes:
+            for v in n.variants:
+                if v.variant.id not in variants:
+                    variants[v.variant.id] = v.variant
+        for v in self.additional_variants:
+            if v.id not in variants:
+                variants[v.id] = v
+        return variants
+
+    def append(self, node:PVGNode) -> None:
+        """ Append node """
+        assert self.nodes[-1].is_inbond_of(node)
+        self.nodes.append(node)
+        if self._len is not None:
+            self._len += len(node.seq.seq)
+
+    def add_additional_variants(self, variants:Iterable[VariantRecord]):
+        """ Add additional variants """
+        self.additional_variants.update(variants)
+        if self._variants is not None:
+            for v in variants:
+                if v.id not in self._variants:
+                    self._variants[v.id] = v
+
+    def is_subgraph_spanning(self) -> bool:
+        """ Checks if the nodes are spanning over subgraphs. """
+        subgraph_ids = set().union(*[n.get_subgraph_id_set() for n in self.nodes])
+        return len(subgraph_ids) > 1
+
+    def number_of_nodes(self) -> int:
+        """ len """
+        return len(self.nodes)
+
+    def has_any_potential_island_variant(self, node:PVGNode) -> bool:
+        """ Checks if the given node has any non global variant """
+        for v in node.variants:
+            if v.variant != node.global_variant and v.variant not in self.global_variants:
+                return True
+        return False
+
+class PVGNodePathArchipel(PVGNodePath):
+    """ PVGNodePathArchipel """
+    def __init__(self, nodes:List[PVGNode], additional_variants:Set[VariantRecord],
+        nflanking:List[PVGNode]=None, cflanking:List[PVGNode]=None, flanking_size:int=9,
+        islands:List[int]=None, global_variants:Set[VariantRecord]=None):
+        super().__init__(
+            nodes=nodes,
+            additional_variants=additional_variants,
+            global_variants=global_variants
+        )
+        self.nflanking = nflanking or []
+        self.cflanking = cflanking or []
+        self.flanking_size = flanking_size
+        self.islands = islands or []
+
+    def is_nflanking_full(self):
+        """ Is nflanking full """
+        return len(self.nflanking) >= self.flanking_size
+
+    def is_cflanking_full(self):
+        """ Is cflanking full """
+        return len(self.cflanking >= self.flanking_size)
+
+    def has_any_island(self):
+        """ Has any island """
+        return len(self.islands) > 0
+
+    def __copy__(self) -> PVGNodePathArchipel:
+        """ copy """
+        new_path:PVGNodePathArchipel = super().__copy__()
+        new_path.__class__ = self.__class__
+        new_path.nflanking = copy.copy(self.nflanking)
+        new_path.cflanking = copy.copy(self.cflanking)
+        new_path.flanking_size = self.flanking_size
+        new_path.islands = copy.copy(self.islands)
+        new_path.global_variants = copy.copy(self.global_variants)
+        return new_path
+
+    def to_reef(self) -> PVGNodePathReef:
+        """ Convert to PVGNodePathReef """
+        return PVGNodePathReef(
+            nodes=self.nodes,
+            additional_variants=self.additional_variants,
+            global_variants=self.global_variants,
+            flanking_size=self.flanking_size
+        )
+
+    def is_valid_path(self) -> bool:
+        """ Check if path is valid """
+        return self.has_any_island()
+
+class PVGNodePathReefMetadata:
+    """ PVGNodePathReefMetadata """
+    def __init__(self, subgraph_id:int, global_variant:VariantRecord=None,
+            nodes:List[int]=None):
+        """ constructor """
+        self.subgraph_id = subgraph_id
+        self.global_variant = global_variant
+        self.nodes = nodes or []
+
+def append_reef(reefs:List[PVGNodePathReefMetadata], i:int, node:PVGNode):
+    """ append reef """
+    if not reefs:
+        reef = PVGNodePathReefMetadata(
+            subgraph_id=node.subgraph_id,
+            global_variant=node.global_variant,
+            nodes=[i]
+        )
+        reefs.append(reef)
+    elif node.subgraph_id == reefs[-1].subgraph_id:
+        reefs[-1].nodes.append(i)
+    else:
+        reef = PVGNodePathReefMetadata(
+            subgraph_id=node.subgraph_id,
+            global_variant=node.global_variant,
+            nodes=[i]
+        )
+        reefs.append(reef)
+    return reefs
+
+class PVGNodePathReef(PVGNodePath):
+    """ PVGNodePathReef """
+    def __init__(self, nodes:List[PVGNode], additional_variants:Set[VariantRecord],
+            reefs:List[PVGNodePathReefMetadata]=None, global_variants:Set[VariantRecord]=None,
+            flanking_size:int=9):
+        """ Constructor """
+        super().__init__(
+            nodes=nodes,
+            additional_variants=additional_variants,
+            global_variants=global_variants
+        )
+        # (subgraph_id, nodes indices)
+        self.reefs = reefs or self.find_reefs()
+        self.flanking_size = flanking_size
+
+    def find_reefs(self) -> List[PVGNodePathReefMetadata]:
+        """ find all reefs """
+        reefs:List[PVGNodePathReefMetadata] = []
+        for i, node in enumerate(self.nodes):
+            append_reef(reefs, i, node)
+        return reefs
+
+    def is_last_reef_full(self) -> bool:
+        """ Check if the last reef is full """
+        return self.reefs[-1].global_variant is None \
+            and len(self.reefs[-1].nodes) >= self.flanking_size
+
+    def add_node(self, node:PVGNode):
+        """ Add node """
+        self.nodes.append(node)
+        if node.global_variant:
+            self.global_variants.add(node.global_variant)
+        i = len(self.nodes)
+        append_reef(self.reefs, i, node)
+
+    def __copy__(self) -> PVGNodePathReef:
+        """ copy """
+        new_path:PVGNodePathReef = super().__copy__()
+        new_path.__class__ = self.__class__
+        new_path.reefs = copy.deepcopy(self.reefs)
+        new_path.flanking_size = self.flanking_size
+        new_path.global_variants = copy.copy(self.global_variants)
+        return new_path
+
+    def is_valid_path(self) -> bool:
+        """ Check if path is valid """
+        return True
+
+    def generate_kmers(self) -> Set[Tuple[str]]:
+        """ Generate kmers """
+        kmers = set()
+        for i in range(self.number_of_nodes() - self.flanking_size + 1):
+            kmer = self.generate_kmer(i)
+            kmers.add(kmer)
+        return kmers
+
+    def generate_kmer(self, i) -> Tuple[str]:
+        return tuple(self.nodes[j].id for j in range(i, i + self.flanking_size))
+
+class PVGNodePathSlidingWindow(PVGNodePath):
+    """ PVGNodePathSlidingWindow for generating all variant-containing peptides
+    of length 8-11 AA using a sliding window approach.
+
+    Unlike archipel/reef modes, this enumerates all possible 8-11mer windows
+    that contain at least one variant, without requiring flanking structures.
+    Ideal for neoantigen prediction where comprehensive coverage is needed.
+    """
+    def __init__(self, nodes:List[PVGNode], additional_variants:Set[VariantRecord],
+            min_length:int=8, max_length:int=11):
+        """ Constructor """
+        super().__init__(
+            nodes=nodes,
+            additional_variants=additional_variants
+        )
+        self.min_length = min_length
+        self.max_length = max_length
+
+    def __copy__(self) -> PVGNodePathSlidingWindow:
+        """ copy """
+        new_path:PVGNodePathSlidingWindow = super().__copy__()
+        new_path.__class__ = self.__class__
+        new_path.min_length = self.min_length
+        new_path.max_length = self.max_length
+        return new_path
+
+TypeVariantPeptideMetadataMap = Dict[Seq, Dict[str, PVGPeptideMetadata]]
+
+class PVGCandidateNodePaths():
     """ Helper class for looking for peptides with miscleavages. This class
     defines the collection of nodes in sequence that starts from the same node,
     with up to X allowed miscleavages that makes the miscleaved peptide
@@ -190,7 +417,7 @@ class MiscleavedNodes():
         - `leading_node` (PVGNode): The start node that the miscleaved peptides
           are called from. This node must present in the PVG graph.
     """
-    def __init__(self, data:Deque[MiscleavedNodeSeries],
+    def __init__(self, data:Deque[PVGNodePath],
             cleavage_params:CleavageParams, orfs:List[PVGOrf]=None, tx_id:str=None,
             gene_id:str=None, leading_node:PVGNode=None, subgraphs:SubgraphTree=None,
             is_circ_rna:bool=False):
@@ -203,6 +430,7 @@ class MiscleavedNodes():
         self.leading_node = leading_node
         self.subgraphs = subgraphs
         self.is_circ_rna = is_circ_rna
+
 
     def is_valid_seq(self, seq:Seq, pool:Set[Seq], denylist:Set[str]) -> bool:
         """ Check whether the seq is valid """
@@ -272,13 +500,13 @@ class MiscleavedNodes():
         segments.sort(key=lambda x:x.query)
         return segments
 
-    def join_miscleaved_peptides(self, pool:TypeVariantPeptideMetadataMap,
+    def join_peptides(self, pool:TypeVariantPeptideMetadataMap,
             check_variants:bool, additional_variants:List[VariantRecord],
             denylist:Set[str], is_start_codon:bool=False,
             circ_rna:CircRNAModel=None, truncate_sec:bool=False,
             check_external_variants:bool=True, check_orf:bool=False,
-            force_init_met:bool=True
-            ) -> Iterable[Tuple[Seq, VariantPeptideMetadata]]:
+            clip_nterm_m:bool=True, force_init_met:bool=True
+            ) -> Iterable[Tuple[Seq, PVGPeptideMetadata]]:
         """ join miscleaved peptides and update the peptide pool.
 
         Args:
@@ -297,7 +525,7 @@ class MiscleavedNodes():
         """
         for series in self.data:
             queue = series.nodes
-            metadata = VariantPeptideMetadata(check_orf=check_orf)
+            metadata = PVGPeptideMetadata(check_orf=check_orf)
             seqs_to_join:List[Seq] = []
             size:int = 0
             variants:Dict[str,VariantRecord] = {}
@@ -339,7 +567,7 @@ class MiscleavedNodes():
                 if self.is_circ_rna \
                         and (any(v.is_circ_rna() for v in variants.values()) \
                         or any(v.is_circ_rna() for v in orf.start_gain)):
-                    if orf.is_valid_orf_to_misc_nodes(queue, self.subgraphs, circ_rna):
+                    if orf.is_valid_orf_to_node_path(queue, self.subgraphs, circ_rna):
                         if any(n.is_missing_any_variant(in_seq_variants.values()) for n in queue):
                             continue
                         metadata.orf = tuple(orf.orf)
@@ -410,18 +638,19 @@ class MiscleavedNodes():
 
             seqs = self.translational_modification(seq, metadata, denylist,
                 variants.values(), is_start_codon, selenocysteines,
-                check_variants, check_external_variants, pool, queue
+                check_variants, check_external_variants, pool, queue,
+                clip_nterm_m
             )
             for seq, metadata in seqs:
                 yield seq, metadata
 
 
-    def translational_modification(self, seq:Seq, metadata:VariantPeptideMetadata,
+    def translational_modification(self, seq:Seq, metadata:PVGPeptideMetadata,
             denylist:Set[str], variants:Set[VariantRecord], is_start_codon:bool,
             selenocysteines:List[seqvar.VariantRecordWithCoordinate],
             check_variants:bool, check_external_variants:bool, pool:Set[Seq],
-            nodes:List[PVGNode]
-            ) -> Iterable[Tuple[Seq,VariantPeptideMetadata]]:
+            nodes:List[PVGNode], clip_nterm_m:bool
+            ) -> Iterable[Tuple[Seq,PVGPeptideMetadata]]:
         """ Apply any modification that could happen during translation. The
         kinds of modifications that could happen are:
         1. Leading Methionine truncation.
@@ -430,9 +659,15 @@ class MiscleavedNodes():
         if variants or not check_variants:
             is_valid = self.is_valid_seq(seq, pool, denylist)
 
-            # The first amino acid must be Methionine at this point.
-            is_valid_start =  is_start_codon and seq.startswith('M') and\
-                self.is_valid_seq(seq[1:], pool, denylist)
+            is_valid_start =  is_start_codon and (
+                not clip_nterm_m or
+                (seq.startswith('M') and self.is_valid_seq(seq[1:], pool, denylist))
+            )
+            ## conflict:
+            # # The first amino acid must be Methionine at this point.
+            # is_valid_start =  is_start_codon and seq.startswith('M') and (
+            #     self.is_valid_seq(seq[1:], pool, denylist)
+            # )
 
             if is_valid or is_valid_start:
                 cur_metadata = copy.copy(metadata)
@@ -448,7 +683,7 @@ class MiscleavedNodes():
                     cur_metadata_2.segments = self.create_peptide_segments(nodes)
                     yield seq, cur_metadata_2
 
-                if is_valid_start:
+                if clip_nterm_m and is_valid_start:
                     cur_seq=seq[1:]
                     cur_nodes = list(nodes)
                     cur_nodes[0] = cur_nodes[0].copy()
@@ -534,6 +769,14 @@ class MiscleavedNodes():
                     all_missing = False
         return any_overlap and all_missing
 
+    def generate_reef_kmers(self) -> Set[Tuple[str]]:
+        """ Generate Kmers for reefs """
+        kmers = set()
+        for path in self.data:
+            if not isinstance(path, PVGNodePathReef):
+                continue
+            kmers.update(path.generate_kmers())
+        return kmers
 
 def update_peptide_pool(seq:aa.AminoAcidSeqRecord,
         peptide_pool:Set[aa.AminoAcidSeqDict],
@@ -566,7 +809,7 @@ def update_peptide_pool(seq:aa.AminoAcidSeqRecord,
             + str(label_counter[label])
         peptide_pool.add(seq)
 
-class VariantPeptideDict():
+class PVGPeptideFinder():
     """ Variant peptide pool as dict.
 
     Attributes:
@@ -582,13 +825,15 @@ class VariantPeptideDict():
           argument is the circRNA variant.
     """
     def __init__(self, tx_id:str, peptides:TypeVariantPeptideMetadataMap=None,
-            seqs:Set[Seq]=None, labels:Dict[str,int]=None,
+            seqs:Set[Seq]=None, labels:Dict[str,int]=None, mode:str='misc',
             global_variant:VariantRecord=None, gene_id:str=None,
             truncate_sec:bool=False, w2f:bool=False, check_external_variants:bool=True,
             cleavage_params:CleavageParams=None, check_orf:bool=False):
         """ constructor """
+        assert mode in [m.value for m in constant.PeptideFindingMode]
         self.tx_id = tx_id
         self.peptides = peptides or {}
+        self.mode = mode
         self.seqs = seqs or set()
         self.labels = labels or {}
         self.global_variant = global_variant
@@ -599,23 +844,24 @@ class VariantPeptideDict():
         self.cleavage_params = cleavage_params
         self.check_orf = check_orf
 
-    def find_miscleaved_nodes(self, node:PVGNode, orfs:List[PVGOrf],
+    def find_candidate_node_paths_misc(self, node:PVGNode, orfs:List[PVGOrf],
             cleavage_params:CleavageParams, tx_id:str, gene_id:str,
             leading_node:PVGNode, subgraphs:SubgraphTree, is_circ_rna:bool,
             backsplicing_only:bool
-            ) -> MiscleavedNodes:
+            ) -> PVGCandidateNodePaths:
         """ Find all miscleaved nodes.
 
         node vs leading_node:
-            - When calling this function from a node within a PVG graph, a copy
-              of the node should be first created. This is because if the ORF
-              start site is located in the node, the peptide sequence should be
-              called form the ORF start site, rather than the beginning of the
-              sequence. So then a copy should be created from this node and
-              only keep the sequence after the ORF start.
-            - The `leading_node` must tbe the original copy of the node within
-              the graph, that the `node` is copied from. This is used to
-              retrieve INDELs from the downstream node.
+            - When finding candidate peptides sthat starts with a series of
+              contigiuos nodes, a copy of the first node must be first created.
+              This is because if the ORF start site is located in the node, the
+              valid peptide sequence should be called form the ORF start site,
+              rather than the beginning of the sequence. So then a copy should
+              be created from this node and only keep the sequence after the ORF start.
+            - The `leading_node` must tbe the original copy of the first node
+              of the node path in the graph, that the first element of the `node_path`
+              is copied from. This is used to retrieve INDELs from the downstream
+              node.
 
         Args:
             - `node` (PVGNode): The node that miscleaved peptide sequences
@@ -623,13 +869,17 @@ class VariantPeptideDict():
             - `orfs` (List[PVGPOrf]): The ORF start and end locations.
             - `cleavage_params` (CleavageParams): Cleavage related parameters.
             - `tx_id` (str): Transcript ID.
+            - `gene_id` (str): Gene ID.
+            - `leading_nodes` (List[PVGNode]): The leading node to find candidate
+              node paths.
             - `leading_node` (PVGNode): The start node that the miscleaved
               peptides are called from. This node must present in the PVG graph.
         """
         if not orfs:
             raise ValueError('ORFs are empty')
-        queue = deque([[node]])
-        nodes = MiscleavedNodes(
+        cur_path = PVGNodePath([node], set())
+        queue = deque([cur_path])
+        paths = PVGCandidateNodePaths(
             data=deque([]),
             cleavage_params=cleavage_params,
             orfs=orfs,
@@ -643,24 +893,19 @@ class VariantPeptideDict():
         if not (node.cpop_collapsed or node.truncated) and \
                 (not backsplicing_only or len(node.get_subgraph_id_set()) > 1):
             additional_variants = leading_node.get_downstream_stop_altering_variants()
-            series = MiscleavedNodeSeries([node], additional_variants)
-            if series.is_too_long(self.cleavage_params) and not node.selenocysteines:
-                return nodes
-            if not series.is_too_short(self.cleavage_params):
-                nodes.data.append(series)
+            path = PVGNodePath([node], additional_variants)
+            if path.is_too_long(self.cleavage_params) and not node.selenocysteines:
+                return paths
+            if not path.is_too_short(self.cleavage_params):
+                paths.data.append(path)
 
         while queue:
-            cur_batch = queue.pop()
-            cur_node = cur_batch[-1]
+            cur_path = queue.pop()
+            cur_node = cur_path.nodes[-1]
             # Turn it into a doct of id to variant
-            batch_vars:Dict[str, VariantRecord] = {}
+            path_vars = cur_path.variants
 
-            for _node in cur_batch:
-                for var in _node.variants:
-                    if var.variant.id not in batch_vars:
-                        batch_vars[var.variant.id] = var.variant
-
-            n_cleavages = len([x for x in cur_batch if not x.cpop_collapsed]) - 1
+            n_cleavages = len([x for x in cur_path.nodes if not x.cpop_collapsed]) - 1
 
             if n_cleavages >= cleavage_params.miscleavage:
                 continue
@@ -678,23 +923,21 @@ class VariantPeptideDict():
                     continue
                 if _node.truncated:
                     continue
-                new_batch = copy.copy(cur_batch)
+                new_path = copy.copy(cur_path)
 
                 is_stop = len(_node.seq.seq) == 1 and _node.seq.seq.startswith('*')
                 if is_stop:
                     continue
 
-                new_batch.append(_node)
+                new_path.append(_node)
 
-                if backsplicing_only:
+                if backsplicing_only and not cur_path.is_subgraph_spanning():
                     # Skip peptides not spaning the backsplicing site
-                    subgraph_ids = set().union(*[n.get_subgraph_id_set() for n in cur_batch])
-                    if len(subgraph_ids) == 1:
-                        continue
+                    continue
 
                 additional_variants = _node.get_downstream_stop_altering_variants()
 
-                cur_vars = set(batch_vars.keys())
+                cur_vars = set(path_vars.keys())
                 for var in _node.variants:
                     cur_vars.add(var.variant.id)
                 cur_vars.update({v.id for v in additional_variants})
@@ -702,26 +945,234 @@ class VariantPeptideDict():
                     continue
 
                 if not _node.cpop_collapsed:
-                    series = MiscleavedNodeSeries(copy.copy(new_batch), additional_variants)
-                    if series.is_too_long(self.cleavage_params) \
-                            and not series.has_trailing_selenocysteins():
+                    new_path.add_additional_variants(additional_variants)
+                    if new_path.is_too_long(self.cleavage_params) \
+                            and not new_path.has_trailing_selenocysteins():
                         continue
-                    if not series.is_too_short(self.cleavage_params):
-                        nodes.data.append(series)
+                    if not new_path.is_too_short(self.cleavage_params):
+                        paths.data.append(new_path)
                     if n_cleavages + 1 == cleavage_params.miscleavage:
                         continue
                     if n_cleavages + 1 > cleavage_params.miscleavage:
                         raise ValueError('Something just went wrong')
-                queue.append(new_batch)
-        return nodes
+                queue.append(new_path)
+        return paths
 
-    def add_miscleaved_sequences(self, node:PVGNode, orfs:List[PVGOrf],
-            cleavage_params:CleavageParams,
-            check_variants:bool, is_start_codon:bool,
+    def find_candidate_node_paths_archipel(self, node:PVGNode,
+            orfs:List[PVGOrf], cleavage_params:CleavageParams, tx_id:str, gene_id:str,
+            leading_node:PVGNode, subgraphs:SubgraphTree, is_circ_rna:bool,
+            backsplicing_only:bool, is_start_codon:bool, reef_kmers:Set[Tuple[Seq]]
+            ) -> PVGCandidateNodePaths:
+        """
+        This function is used to find node paths in two styles: archipel and reef.
+        Archipel nodes are varaint nodes as islands, separated by reference nodes,
+        and are surrounded by flanking reference nodes (e.g., the ocean). Reef
+        nodes are those only carrying backbone alterning variants, such as large
+        indels (alternative splicing), fusion, and circRNA, without any other
+        small variants.
+        """
+        if not orfs:
+            raise ValueError('ORFs are empty')
+
+        paths = PVGCandidateNodePaths(
+            data=deque([]),
+            cleavage_params=cleavage_params,
+            orfs=orfs,
+            tx_id=tx_id,
+            gene_id=gene_id,
+            leading_node=leading_node,
+            subgraphs=subgraphs,
+            is_circ_rna=is_circ_rna
+        )
+
+        if any(v.variant != node.global_variant for v in node.variants):
+            if not is_start_codon:
+                return paths
+            islands = [0]
+            nflanking = []
+        else:
+            islands = []
+            nflanking = [0]
+        flanking_size = cleavage_params.flanking_size
+        cur_path = PVGNodePathArchipel(
+            nodes=[node], additional_variants=set(),
+            nflanking=nflanking, flanking_size=flanking_size,
+            islands=islands
+        )
+        queue:Deque[PVGNodePath] = deque([cur_path])
+
+        while queue:
+            cur_path = queue.pop()
+
+            for out_node in cur_path.nodes[-1].out_nodes:
+                is_stop = len(out_node.seq.seq) == 1 and out_node.seq.seq.startswith('*')
+                if is_stop:
+                    if cur_path.is_valid_path() \
+                            and (not backsplicing_only or new_path.is_subgraph_spanning()):
+                        paths.data.append(cur_path)
+                    continue
+
+                if isinstance(cur_path, PVGNodePathArchipel):
+                    new_path = copy.copy(cur_path)
+                    i = new_path.number_of_nodes()
+                    new_path.append(out_node)
+                    if not cur_path.has_any_potential_island_variant(out_node):
+                        if not new_path.has_any_island():
+                            if new_path.is_nflanking_full():
+                                if out_node.global_variant:
+                                    new_path = new_path.to_reef()
+                                    kmer = new_path.generate_kmer(0)
+                                    if kmer in reef_kmers:
+                                        continue
+                                    queue.append(new_path)
+                                continue
+                            new_path.nflanking.append(i)
+                        else:
+                            if len(new_path.cflanking) > flanking_size:
+                                continue
+                            new_path.cflanking.append(i)
+                            if len(new_path.cflanking) == flanking_size:
+                                if not backsplicing_only or new_path.is_subgraph_spanning():
+                                    paths.data.append(new_path)
+                                continue
+                    else:
+                        if not is_start_codon and len(new_path.nflanking) < flanking_size:
+                            continue
+                        new_path.islands.append(i)
+                        new_path.cflanking = []
+                elif isinstance(cur_path, PVGNodePathReef):
+                    if cur_path.has_any_potential_island_variant(out_node):
+                        paths.data.append(cur_path)
+                        continue
+                    if cur_path.is_last_reef_full():
+                        paths.data.append(cur_path)
+                        continue
+                    new_path = copy.copy(cur_path)
+                    new_path.add_node(out_node)
+                else:
+                    raise TypeError(f"Unrecognized type {type(cur_path)}")
+                queue.append(new_path)
+        return paths
+
+    def find_candidate_node_paths_sliding_window(self, node:PVGNode,
+            orfs:List[PVGOrf], cleavage_params:CleavageParams, tx_id:str, gene_id:str,
+            leading_node:PVGNode, subgraphs:SubgraphTree, is_circ_rna:bool,
+            backsplicing_only:bool, min_length:int=8, max_length:int=11
+            ) -> PVGCandidateNodePaths:
+        """
+        Find all 8-11mer peptide paths using true sliding window on atomic graph.
+
+        With create_atomic_graph(), all nodes are single amino acids, so this
+        becomes trivial: walk N consecutive nodes (8-11 nodes = 8-11 AA), check
+        for variants, emit if valid, then slide to next position.
+
+        No truncation, no overshoot, no complex path enumeration - just simple
+        consecutive node walking.
+
+        Args:
+            node (PVGNode): Starting node (single AA in atomic graph)
+            orfs (List[PVGOrf]): ORF start and end locations
+            cleavage_params (CleavageParams): Cleavage parameters (min/max length used)
+            tx_id (str): Transcript ID
+            gene_id (str): Gene ID
+            leading_node (PVGNode): The original node in the graph
+            subgraphs (SubgraphTree): Subgraph tree
+            is_circ_rna (bool): Whether this is circular RNA
+            backsplicing_only (bool): Only output peptides spanning backsplice junction
+            min_length (int): Minimum peptide length (default 8)
+            max_length (int): Maximum peptide length (default 11)
+
+        Returns:
+            PVGCandidateNodePaths: Collection of candidate node paths representing
+                all possible 8-11mer windows
+        """
+        if not orfs:
+            raise ValueError('ORFs are empty')
+
+        paths = PVGCandidateNodePaths(
+            data=deque([]),
+            cleavage_params=cleavage_params,
+            orfs=orfs,
+            tx_id=tx_id,
+            gene_id=gene_id,
+            leading_node=leading_node,
+            subgraphs=subgraphs,
+            is_circ_rna=is_circ_rna
+        )
+
+        # Build path of min_length nodes first
+        cur_path = PVGNodePath([node], set())
+        queue:Deque[PVGNodePath] = deque([cur_path])
+
+        while queue:
+            cur_path = queue.pop()
+            cur_len = len(cur_path)  # Number of amino acids
+
+            # If we have at least min_length AA, emit all windows from min to max length
+            if cur_len >= min_length:
+                for window_len in range(min_length, min(max_length, cur_len) + 1):
+                    # Take first window_len nodes
+                    window_nodes = cur_path.nodes[:window_len]
+
+                    # Check if window contains any variants
+                    has_variant = any(
+                        any(not v.is_silent for v in n.variants)
+                        for n in window_nodes
+                    )
+
+                    if not has_variant:
+                        continue
+
+                    # Check backsplicing requirement for circRNA
+                    if backsplicing_only:
+                        subgraph_ids = set().union(*[n.get_subgraph_id_set() for n in window_nodes])
+                        if len(subgraph_ids) <= 1:
+                            continue
+
+                    # Create window path and add to results
+                    window_path = PVGNodePath(
+                        nodes=list(window_nodes),
+                        additional_variants=set()
+                    )
+                    paths.data.append(window_path)
+
+            # Stop extending if we've reached max_length
+            if cur_len >= max_length:
+                continue
+
+            # Extend by one more node
+            cur_node = cur_path.nodes[-1]
+            for out_node in cur_node.out_nodes:
+                # Skip stop codons
+                if len(out_node.seq.seq) == 1 and out_node.seq.seq.startswith('*'):
+                    continue
+
+                # Skip hybrid nodes in circRNA
+                if is_circ_rna and out_node.is_hybrid_node(subgraphs):
+                    continue
+
+                # Skip truncated nodes
+                if out_node.truncated:
+                    continue
+
+                # Extend path
+                new_path = copy.copy(cur_path)
+                new_path.append(out_node)
+
+                # Get additional variants
+                additional_variants = out_node.get_downstream_stop_altering_variants()
+                new_path.add_additional_variants(additional_variants)
+
+                queue.append(new_path)
+
+        return paths
+
+    def add_peptide_sequences(self, node:PVGNode, orfs:List[PVGOrf],
+            cleavage_params:CleavageParams, check_variants:bool, is_start_codon:bool,
             additional_variants:List[VariantRecord], denylist:Set[str],
-            leading_node:PVGNode=None, subgraphs:SubgraphTree=None,
-            circ_rna:CircRNAModel=None, backsplicing_only:bool=False,
-            force_init_met:bool=True):
+            reef_kmers:Set[Tuple[str]], leading_node:PVGNode=None,
+            subgraphs:SubgraphTree=None, circ_rna:CircRNAModel=None,
+            backsplicing_only:bool=False, force_init_met:bool=True):
         """ Add amino acid sequences starting from the given node, with number
         of miscleavages no more than a given number. The sequences being added
         are the sequence of the current node, and plus n of downstream nodes,
@@ -748,16 +1199,36 @@ class VariantPeptideDict():
         """
         if leading_node is None:
             leading_node = node
-        miscleaved_nodes = self.find_miscleaved_nodes(
-            node=node, orfs=orfs, cleavage_params=cleavage_params,
-            tx_id=self.tx_id, gene_id=self.gene_id, leading_node=leading_node,
-            subgraphs=subgraphs, is_circ_rna=circ_rna is not None,
-            backsplicing_only=backsplicing_only
-        )
+
+        if self.mode == 'misc':
+            candidate_paths = self.find_candidate_node_paths_misc(
+                node=node, orfs=orfs, cleavage_params=cleavage_params,
+                tx_id=self.tx_id, gene_id=self.gene_id, leading_node=leading_node,
+                subgraphs=subgraphs, is_circ_rna=circ_rna is not None,
+                backsplicing_only=backsplicing_only
+            )
+        elif self.mode == 'sliding_window':
+            candidate_paths = self.find_candidate_node_paths_sliding_window(
+                node=node, orfs=orfs, cleavage_params=cleavage_params,
+                tx_id=self.tx_id, gene_id=self.gene_id, leading_node=leading_node,
+                subgraphs=subgraphs, is_circ_rna=circ_rna is not None,
+                backsplicing_only=backsplicing_only,
+                min_length=cleavage_params.min_length,
+                max_length=cleavage_params.max_length
+            )
+        else:  # archipel
+            candidate_paths = self.find_candidate_node_paths_archipel(
+                node=node, orfs=orfs, cleavage_params=cleavage_params,
+                tx_id=self.tx_id, gene_id=self.gene_id, leading_node=leading_node,
+                subgraphs=subgraphs, is_circ_rna=circ_rna is not None,
+                backsplicing_only=backsplicing_only, is_start_codon=is_start_codon,
+                reef_kmers=reef_kmers
+            )
+            reef_kmers.update(candidate_paths.generate_reef_kmers())
         if self.global_variant and self.global_variant not in additional_variants:
             additional_variants.append(self.global_variant)
 
-        it = miscleaved_nodes.join_miscleaved_peptides(
+        it = candidate_paths.join_peptides(
             pool=self.peptides,
             check_variants=check_variants,
             additional_variants=additional_variants,
@@ -767,6 +1238,7 @@ class VariantPeptideDict():
             truncate_sec=self.truncate_sec,
             check_external_variants=self.check_external_variants,
             check_orf=self.check_orf,
+            clip_nterm_m=self.mode == 'misc',
             force_init_met=force_init_met
         )
         for seq, metadata in it:

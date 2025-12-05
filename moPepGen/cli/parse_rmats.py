@@ -100,7 +100,7 @@ def add_subparser_parse_rmats(subparsers:argparse._SubParsersAction):
 
     common.add_args_output_path(p, OUTPUT_FILE_FORMATS)
     common.add_args_source(p)
-    common.add_args_reference(p, proteome=False)
+    common.add_args_reference(p)
     common.add_args_debug_level(p)
     p.set_defaults(func=parse_rmats)
     common.print_help_if_missing_args(p)

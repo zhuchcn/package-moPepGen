@@ -4,7 +4,8 @@ import copy
 from functools import cmp_to_key
 from collections import deque
 import math
-from typing import Dict, List, Set, Tuple, Iterable
+import uuid
+from typing import Dict, List, Set, Tuple, Iterable, Deque
 from moPepGen import aa, circ, seqvar, get_logger
 from moPepGen.SeqFeature import FeatureLocation
 from moPepGen.seqvar.VariantRecord import VariantRecord
@@ -43,6 +44,7 @@ class PVGNode():
     def __init__(self, seq:aa.AminoAcidSeqRecordWithCoordinates,
             reading_frame_index:int, subgraph_id:str,
             variants:List[seqvar.VariantRecordWithCoordinate]=None,
+            global_variant:VariantRecord=None,
             in_nodes:Set[PVGNode]=None, out_nodes:Set[PVGNode]=None,
             start_codons:List[int]=None,
             selenocysteines:List[seqvar.VariantRecordWithCoordinate]=None,
@@ -51,11 +53,13 @@ class PVGNode():
             npop_collapsed:bool=False, cpop_collapsed:bool=False,
             upstream_indel_map:Dict[PVGNode, List[seqvar.VariantRecord]]=None,
             collapsed_variants:Dict[PVGNode, List[seqvar.VariantRecordWithCoordinate]]=None,
-            left_cleavage_pattern_end:int=None, right_cleavage_pattern_start:int=None
+            left_cleavage_pattern_end:int=None, right_cleavage_pattern_start:int=None,
+            id:str=None
             ):
         """ Construct a PVGNode object. """
         self.seq = seq
         self.variants = variants or []
+        self.global_variant = global_variant
         self.in_nodes = in_nodes or set()
         self.out_nodes = out_nodes or set()
         self.start_codons = start_codons or []
@@ -74,6 +78,7 @@ class PVGNode():
         self.collapsed_variants = collapsed_variants or {}
         self.left_cleavage_pattern_end = left_cleavage_pattern_end
         self.right_cleavage_pattern_start = right_cleavage_pattern_start
+        self.id = id or str(uuid.uuid4())
 
     def __getitem__(self, index) -> PVGNode:
         """ get item """
@@ -129,7 +134,7 @@ class PVGNode():
         else:
             right_cleavage_pattern_start = None
 
-        return PVGNode(
+        new_node = PVGNode(
             seq=seq,
             variants=variants,
             cleavage=self.cleavage,
@@ -147,6 +152,10 @@ class PVGNode():
             left_cleavage_pattern_end=left_cleavage_pattern_end,
             right_cleavage_pattern_start=right_cleavage_pattern_start
         )
+        for v in new_node.variants:
+            if v.variant == self.global_variant:
+                new_node.global_variant = v.variant
+        return new_node
 
     def add_out_edge(self, node:PVGNode) -> None:
         """ Add a outbound edge from this node.
@@ -650,6 +659,9 @@ class PVGNode():
             right_cleavage_pattern_start=self.right_cleavage_pattern_start
         )
         new_node.orf = self.orf
+        for v in new_node.variants:
+            if v.variant == self.global_variant:
+                new_node.global_variant = v.variant
 
         left_secs, right_secs = self.split_selenocysteines(index)
         self.selenocysteines = left_secs
@@ -686,6 +698,90 @@ class PVGNode():
         self.add_out_edge(new_node)
         return new_node
 
+    def split_node_archipel(self, global_variant:VariantRecord) -> Deque[PVGNode]:
+        """ Split reference segments, those don't carry any variants, into nodes
+        that each node contains a single amino acid """
+        nodes = deque([])
+        i = 0
+        cur = self
+        while True:
+            if len(cur.seq.seq) <= i + 1:
+                nodes.append(cur)
+                break
+            if cur.seq.seq[i] == '*':
+                if i > 0:
+                    last = cur.split_node(i)
+                    nodes.append(cur)
+                    cur = last
+                    i = 0
+                last = cur.split_node(i + 1)
+                nodes.append(cur)
+                cur = last
+                i = 0
+                continue
+            variants_1 = cur.get_variants_at(i, i+1)
+            variants_2 = cur.get_variants_at(i+1, i+2)
+            is_global_variant_only = all(v == global_variant for v in set(variants_1 + variants_2))
+            is_stop_codon = cur.seq.seq[i] == '*' \
+                or cur.seq.seq[i + 1] == '*'
+            if variants_1 and variants_2 and not is_global_variant_only and not is_stop_codon:
+                i += 1
+                continue
+            last = cur.split_node(i + 1)
+            nodes.append(cur)
+            cur = last
+            i = 0
+        return nodes
+
+    def split_node_atomic(self) -> Deque[PVGNode]:
+        """
+        Split ALL amino acids into individual single-AA nodes.
+        Unlike split_node_archipel which keeps variant islands together,
+        this splits everything (reference AND variant) into atomic units.
+
+        Used by create_atomic_graph() for sliding window mode.
+        """
+        nodes = deque([])
+        cur = self
+
+        while len(cur.seq.seq) > 1:
+            # Split off single amino acid at position 1
+            last = cur.split_node(1)
+            nodes.append(cur)
+            cur = last
+
+        # Append the final single amino acid node
+        nodes.append(cur)
+
+        return nodes
+
+    def collapse_identical_downstreams(self) -> None:
+        """ Collapse downstream nodes that are identical """
+        node_map:Dict[Tuple,List[PVGNode]] = {}
+        for out_node in self.out_nodes:
+            key = (
+                out_node.seq.seq, (x.id for x in out_node.in_nodes),
+                tuple(out_node.variants), tuple(out_node.selenocysteines),
+                out_node.subgraph_id, out_node.cleavage, out_node.truncated,
+                tuple(out_node.orf), out_node.reading_frame_index,
+                out_node.was_bridge, out_node.pre_cleave,
+                out_node.npop_collapsed, out_node.cpop_collapsed
+            )
+            if key not in node_map:
+                node_map[key] = [out_node]
+            else:
+                node_map[key].append(out_node)
+
+        for nodes in node_map.values():
+            if len(nodes) > 1:
+                collapsed_node = nodes[0]
+                for node in nodes[1:]:
+                    for out_node in copy.copy(node.out_nodes):
+                        if out_node not in collapsed_node.out_nodes:
+                            collapsed_node.add_out_edge(out_node)
+                        node.remove_out_edge(out_node)
+                    self.remove_out_edge(node)
+
     def truncate_right(self, i:int) -> PVGNode:
         """ Truncate the right i nucleotides off. """
         right_seq = self.seq[i:]
@@ -708,6 +804,9 @@ class PVGNode():
             cpop_collapsed=self.cpop_collapsed,
             right_cleavage_pattern_start=self.right_cleavage_pattern_start
         )
+        for v in right_node.variants:
+            if v.variant == self.global_variant:
+                right_node.global_variant = v.variant
 
         self.seq = self.seq[:i]
         self.variants = left_variants
@@ -748,6 +847,9 @@ class PVGNode():
             upstream_indel_map=self.upstream_indel_map,
             left_cleavage_pattern_end=self.left_cleavage_pattern_end
         )
+        for v in left_node.variants:
+            if v.variant == self.global_variant:
+                left_node.global_variant = v.variant
         self.upstream_indel_map = {}
 
         self.seq = self.seq[i:]
@@ -815,12 +917,13 @@ class PVGNode():
         """ Return the first start codon index int the sequence. """
         return self.start_codons[0] if self.start_codons else -1
 
-    def copy(self, in_nodes:bool=True, out_nodes:bool=True) -> PVGNode:
+    def copy(self, in_nodes:bool=True, out_nodes:bool=True, id:bool=False) -> PVGNode:
         """ Create a copy of the node """
         new_in_nodes = copy.copy(self.in_nodes) if in_nodes else set()
         new_out_nodes = copy.copy(self.out_nodes) if out_nodes else set()
         return PVGNode(
             seq=self.seq,
+            id=self.id if id else None,
             variants=copy.copy(self.variants),
             in_nodes=new_in_nodes,
             out_nodes=new_out_nodes,
@@ -837,7 +940,8 @@ class PVGNode():
             cpop_collapsed=self.cpop_collapsed,
             upstream_indel_map={k:copy.copy(v) for k,v in self.upstream_indel_map.items()},
             left_cleavage_pattern_end=self.left_cleavage_pattern_end,
-            right_cleavage_pattern_start=self.right_cleavage_pattern_start
+            right_cleavage_pattern_start=self.right_cleavage_pattern_start,
+            global_variant=self.global_variant
         )
 
     def get_nearest_next_ref_index(self) -> int:

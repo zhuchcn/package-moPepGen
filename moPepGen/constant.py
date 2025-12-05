@@ -57,6 +57,16 @@ class VariantPrefix(Enum):
             cls.SECT
         ]
 
+class PeptideFindingMode(Enum):
+    """ Peptide Finding Mode """
+    MISC = 'misc'
+    SLIDING_WINDOW = 'sliding_window'
+    ARCHIPEL = 'archipel'
+
+    def __str__(self):
+        """ str """
+        return self.value
+
 # Variant related constants
 SINGLE_NUCLEOTIDE_SUBSTITUTION = ['SNV', 'SNP', 'INDEL', 'MNV', 'RNAEditingSite']
 ATTRS_POSITION = ['START', 'DONOR_START', 'ACCEPTER_START', 'ACCEPTER_POSITION']

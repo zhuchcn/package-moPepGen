@@ -18,6 +18,7 @@ class TestParseStarFusion(TestCaseIntegration):
             -o {self.work_dir}/fusion_catcher.gvf \\
             -g {self.data_dir}/genome.fasta \\
             -a {self.data_dir}/annotation.gtf \\
+            -p {self.data_dir}/translate.fasta \\
             --source Fusion
         """
         res = sp.run(cmd, shell=True, check=False, capture_output=True)
@@ -36,6 +37,7 @@ class TestParseStarFusion(TestCaseIntegration):
         args.index_dir = None
         args.genome_fasta = self.data_dir/'genome.fasta'
         args.annotation_gtf = self.data_dir/'annotation.gtf'
+        args.proteome_fasta = self.data_dir/'translate.fasta'
         args.reference_source = None
         args.output_path = self.work_dir/'star_fusion.gvf'
         args.min_est_j = 3.0

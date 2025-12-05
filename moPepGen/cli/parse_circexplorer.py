@@ -80,7 +80,7 @@ def add_subparser_parse_circexplorer(subparsers:argparse._SubParsersAction):
     )
     common.add_args_skip_failed(p)
     common.add_args_source(p)
-    common.add_args_reference(p, genome=False, proteome=False)
+    common.add_args_reference(p, genome=False)
     common.add_args_debug_level(p)
     p.set_defaults(func=parse_circexplorer)
     common.print_help_if_missing_args(p)

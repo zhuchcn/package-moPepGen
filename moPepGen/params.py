@@ -2,13 +2,19 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 import dataclasses
-from moPepGen import aa
+from moPepGen import aa, constant
 
 
 if TYPE_CHECKING:
     from typing import Set, Dict, List
     from moPepGen import dna, gtf
 
+
+@dataclasses.dataclass
+class DefaultPeptideParams:
+    min_mw: int
+    min_length: int
+    max_length: int
 
 class CleavageParams():
     """ Cleavage related parameters.
@@ -34,14 +40,37 @@ class CleavageParams():
         - naa_to_collapse (int): The number of bases used for pop collapse.
     """
     def __init__(self, enzyme:str=None, exception:str=None, miscleavage:int=2,
-            min_mw:int=500, min_length:int=7, max_length:int=25,
+            min_mw:int=None, min_length:int=None, max_length:int=None,
             max_variants_per_node:int=7, additional_variants_per_misc:int=2,
             in_bubble_cap_step_down:int=0, min_nodes_to_collapse:int=30,
-            naa_to_collapse:int=5):
+            naa_to_collapse:int=5, flanking_size:int=9, peptide_finding_mode:str='misc'):
         """ constructor """
         self.enzyme = enzyme
+        if self.enzyme and self.enzyme.lower() == 'none':
+            self.enzyme = None
+        peptide_finding_mode = peptide_finding_mode.lower().replace('-', '_')
+        if self.enzyme is None and peptide_finding_mode == constant.PeptideFindingMode.MISC.value:
+            peptide_finding_mode = constant.PeptideFindingMode.SLIDING_WINDOW.value
+        self.peptide_finding_mode = peptide_finding_mode
         self.exception = exception
-        self.miscleavage = miscleavage
+        self.miscleavage = int(miscleavage)
+
+        default_params = self.get_default_peptide_params(
+            peptide_finding_mode=peptide_finding_mode,
+            flanking_size=flanking_size
+        )
+        if min_mw is None:
+            min_mw = default_params.min_mw
+        else:
+            min_mw = float(min_mw)
+        if min_length is None:
+            min_length = default_params.min_length
+        else:
+            min_length = int(min_length)
+        if max_length is None:
+            max_length = default_params.max_length
+        else:
+            max_length = int(max_length)
         self.min_mw = min_mw
         self.min_length = min_length
         self.max_length = max_length
@@ -50,11 +79,34 @@ class CleavageParams():
         self.in_bubble_cap_step_down = in_bubble_cap_step_down
         self.min_nodes_to_collapse = min_nodes_to_collapse
         self.naa_to_collapse = naa_to_collapse
+        self.flanking_size = flanking_size
         if self.exception == 'auto':
             if enzyme == 'trypsin':
                 self.exception = 'trypsin_exception'
             else:
                 self.exception = None
+
+    def get_default_peptide_params(self, peptide_finding_mode:str, flanking_size:int
+            ) -> DefaultPeptideParams:
+        """ Get default peptide lengths based on mode """
+        if peptide_finding_mode == constant.PeptideFindingMode.MISC.value:
+            min_mw = 500
+            min_length = 7
+            max_length = 25
+        elif peptide_finding_mode == constant.PeptideFindingMode.SLIDING_WINDOW.value:
+            min_mw = 0
+            min_length = 8
+            max_length = 11
+        else:
+            min_mw = 0
+            min_length = flanking_size
+            max_length = float("inf")
+
+        return DefaultPeptideParams(
+            min_mw=min_mw,
+            min_length=min_length,
+            max_length=max_length
+        )
 
     def jsonfy(self, graph_params:bool=False):
         """ jsonfy """
@@ -64,7 +116,8 @@ class CleavageParams():
             'miscleavage': self.miscleavage,
             'min_mw': self.min_mw,
             'min_length': self.min_length,
-            'max_length': self.max_length
+            'max_length': self.max_length,
+            'flanking_size': self.flanking_size
         }
         if graph_params:
             data.update({

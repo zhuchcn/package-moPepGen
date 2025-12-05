@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from moPepGen.cli import common
-from moPepGen import params
+from moPepGen import params, constant
 from moPepGen.pipeline.orchestrator import CallVariantOrchestrator
 
 INPUT_FILE_FORMATS = ['.gvf']
@@ -133,6 +133,15 @@ def add_subparser_call_variant(subparsers: argparse._SubParsersAction):
         default=1,
         metavar='<number>'
     )
+    p.add_argument(
+        '--peptide-finding-mode',
+        type=str,
+        choices=['misc', 'archipel', 'sliding-window'],
+        default='misc',
+        help='Peptide finding strategy: misc (enzyme-based miscleavage), '
+            'archipel (variant islands with flanking regions), or '
+            'sliding-window (enumerate all 8-11mer variant-containing peptides).'
+    )
     common.add_args_skip_failed(p)
     common.add_args_reference(p)
     common.add_args_cleavage(p)
@@ -158,7 +167,7 @@ def call_variant_peptide(args: argparse.Namespace) -> None:
         enzyme=args.cleavage_rule,
         exception=args.cleavage_exception,
         miscleavage=int(args.miscleavage),
-        min_mw=float(args.min_mw),
+        min_mw=args.min_mw,
         min_length=args.min_length,
         max_length=args.max_length,
         max_variants_per_node=args.max_variants_per_node[0],
@@ -166,16 +175,26 @@ def call_variant_peptide(args: argparse.Namespace) -> None:
         in_bubble_cap_step_down=args.in_bubble_cap_step_down,
         min_nodes_to_collapse=args.min_nodes_to_collapse,
         naa_to_collapse=args.naa_to_collapse,
+        flanking_size=args.flanking_size,
+        peptide_finding_mode= args.peptide_finding_mode
     )
+
+    if cleavage_params.peptide_finding_mode == constant.PeptideFindingMode.MISC.value:
+        load_canonical_peptides = True
+    else:
+        load_canonical_peptides = False
 
     # Load references in the CLI layer
     reference_data = common.load_references(
         args=args,
         invalid_protein_as_noncoding=args.invalid_protein_as_noncoding,
         cleavage_params=cleavage_params,
+        load_canonical_peptides=load_canonical_peptides,
         load_codon_tables=True,
     )
 
     # Pass reference_data to orchestrator (avoids circular import)
-    orchestrator = CallVariantOrchestrator(args, reference_data=reference_data)
+    orchestrator = CallVariantOrchestrator(
+        args,  cleavage_params=cleavage_params, reference_data=reference_data
+    )
     orchestrator.run()

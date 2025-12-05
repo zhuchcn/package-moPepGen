@@ -6,7 +6,7 @@ from Bio.SeqIO import FastaIO
 from Bio.Seq import Seq
 from moPepGen import VARIANT_PEPTIDE_SOURCE_DELIMITER, aa
 from moPepGen.SeqFeature import FeatureLocation
-from moPepGen.svgraph.VariantPeptideDict import AnnotatedPeptideLabel, PeptideSegment
+from moPepGen.svgraph.PVGPeptideFinder import AnnotatedPeptideLabel, PeptideSegment
 
 
 if TYPE_CHECKING:
