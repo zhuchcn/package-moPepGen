@@ -1,5 +1,4 @@
 """ Module to test PVGNode """
-from typing import Dict, List, Tuple
 from collections import deque
 import unittest
 from moPepGen.svgraph import PVGNode
