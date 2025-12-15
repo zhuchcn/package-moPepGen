@@ -84,7 +84,7 @@ def parse_args(subparsers:argparse._SubParsersAction
         type=float,
         default=1,
         help='Fraction of SNVs to simulate over INDEL in any test case. For'
-        ' example, `--snv--frac 0.5` will have roughly 50% SNVs and 50% INDELs.'
+        ' example, `--snv-frac 0.5` will have roughly 50%% SNVs and 50%% INDELs.'
         ' This has no effect on fusion, circRNA, or altSplice.'
     )
     parser.add_argument(
@@ -92,7 +92,7 @@ def parse_args(subparsers:argparse._SubParsersAction
         type=float,
         default=1,
         help='Fraction of test cases to be SNV only (no INDEL). For example,'
-        ' `--snv-only-frac 0.5` will have roughly 50% test cases to have only'
+        ' `--snv-only-frac 0.5` will have roughly 50%% test cases to have only'
         ' SNV without any INDELs. This has no effect on fusion, circRNA, or altSplice.'
     )
     parser.add_argument(
@@ -165,6 +165,15 @@ def parse_args(subparsers:argparse._SubParsersAction
         type=int,
         default=1,
         help='Number of threads'
+    )
+    parser.add_argument(
+        '--peptide-finding-mode',
+        type=str,
+        choices=['misc', 'archipel', 'sliding-window'],
+        default='misc',
+        help='Peptide finding strategy: misc (enzyme-based miscleavage), '
+            'archipel (variant islands with flanking regions), or '
+            'sliding-window (enumerate all 8-11mer variant-containing peptides).'
     )
     add_args_cleavage(parser)
     add_args_debug_level(parser)
@@ -629,13 +638,16 @@ class FuzzTestCase():
         args.w2f_reassignment = True
         args.cleavage_rule = 'trypsin'
         args.cleavage_exception = None
+        args.peptide_finding_mode = self.config.peptide_finding_mode
         args.miscleavage = 2
         args.min_mw = 500.
         args.min_length = 7
         args.max_length = 25
+        args.flanking_size = self.config.flanking_size
         args.threads = 1
         args.max_variants_per_node = (9, )
         args.additional_variants_per_misc = (2, )
+        args.in_bubble_cap_step_down = 2
         args.min_nodes_to_collapse = 30
         args.naa_to_collapse = 5
         args.noncanonical_transcripts = False
@@ -664,10 +676,12 @@ class FuzzTestCase():
         args.w2f_reassignment = True
         args.cleavage_rule = self.config.cleavage_rule
         args.cleavage_exception = None
+        args.peptide_finding_mode = self.config.peptide_finding_mode
         args.miscleavage = self.config.miscleavage
         args.min_mw = self.config.min_mw
         args.min_length = self.config.min_length
         args.max_length = self.config.max_length
+        args.flanking_size = self.config.flanking_size
 
         with open(self.record.brute_force_fasta, 'wt') as handle:
             with redirect_stdout(handle):
@@ -704,9 +718,9 @@ class FuzzTestConfig():
             min_variants:int, exonic_only:bool, snv_frac:float, snv_only_frac:float,
             fusion_frac:float, circ_rna_frac:float, ci_ratio:float, alt_splice_frac:bool,
             keep_succeeded:bool, save_graph:bool, cleavage_rule:str, cleavage_exception:str,
-            miscleavage:int, min_mw:int, min_length:int, max_length:int, temp_dir:Path,
-            output_dir:Path, ref_dir:Path, fuzz_start:datetime=None, fuzz_end:datetime=None,
-            seed:int=None, nthreads:int=1):
+            peptide_finding_mode:str, miscleavage:int, min_mw:int, min_length:int,
+            max_length:int, flanking_size:int, temp_dir:Path, output_dir:Path, ref_dir:Path,
+            fuzz_start:datetime=None, fuzz_end:datetime=None, seed:int=None, nthreads:int=1):
         """ constructor """
         self.tx_id = tx_id
         self.n_iter = n_iter
@@ -724,10 +738,12 @@ class FuzzTestConfig():
         self.save_graph = save_graph
         self.cleavage_rule = cleavage_rule
         self.cleavage_exception = cleavage_exception
+        self.peptide_finding_mode = peptide_finding_mode
         self.miscleavage = miscleavage
         self.min_mw = min_mw
         self.min_length = min_length
         self.max_length = max_length
+        self.flanking_size = flanking_size
         self.temp_dir = temp_dir
         self.output_dir = output_dir
         self.ref_dir = ref_dir
@@ -862,10 +878,12 @@ def main(args:argparse.Namespace):
         ci_ratio=args.ci_ratio,
         cleavage_rule=args.cleavage_rule,
         cleavage_exception=args.cleavage_exception,
+        peptide_finding_mode=args.peptide_finding_mode,
         miscleavage=args.miscleavage,
         min_mw=args.min_mw,
         min_length=args.min_length,
         max_length=args.max_length,
+        flanking_size=args.flanking_size,
         temp_dir=args.temp_dir,
         output_dir=args.output_dir,
         ref_dir=args.reference_dir,
