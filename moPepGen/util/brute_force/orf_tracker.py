@@ -40,7 +40,26 @@ class ORFTracker:
         return -1
 
     def get_last_in_frame_orf(self, orf:int, lhs:int):
-        """ Get the last in frame ORF before the given position. """
+        """ Get the last in-frame ORF before the given position.
+
+        When processing a peptide window starting at amino acid position `lhs`,
+        this returns an earlier in-frame start codon (if one exists) that precedes
+        `lhs`. This is used to correctly anchor variant effect evaluation when
+        multiple in-frame starts exist in a transcript.
+
+        For example, if there are in-frame starts at nucleotide positions 0, 300,
+        and 600, and we're processing cds_start=600 with a peptide at lhs=150 (AA pos),
+        this returns 300 (the last start before the peptide window).
+
+        Args:
+            orf: The current ORF start position (in nucleotides)
+            lhs: The left boundary of the peptide window (in amino acids relative
+                 to cds_start)
+
+        Returns:
+            The nucleotide position of an in-frame start codon before `lhs`,
+            or -1 if none exists.
+        """
         i = self.orf_to_index[orf]
         reading_frame = orf % 3
         for j in self.reading_frames[reading_frame][::-1]:

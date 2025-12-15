@@ -1,11 +1,11 @@
 """ Refactored BruteForceVariantPeptideCaller with composition """
+from __future__ import annotations
 import copy
-import math
-from typing import Iterable, List, Set, Tuple
+from typing import TYPE_CHECKING
 from itertools import combinations
 from Bio import SeqUtils
 from Bio.Seq import Seq
-from moPepGen import gtf, seqvar, aa, dna, params, constant
+from moPepGen import gtf, seqvar, aa, dna, params
 from moPepGen.SeqFeature import FeatureLocation
 from moPepGen.seqvar.VariantRecord import VariantRecord
 from moPepGen.seqvar.VariantRecordPool import VariantRecordPool
@@ -16,16 +16,20 @@ from .effect_analyzer import VariantEffectAnalyzer
 from .validator import VariantCompatibilityValidator
 
 
+if TYPE_CHECKING:
+    from typing import Iterable, List, Set, Tuple, Dict
+
+
 class BruteForceVariantPeptideCaller:
     """
     Variant peptide caller using the brute force algorithm.
-    
+
     This class orchestrates peptide calling by delegating to helper classes:
     - VariantSequenceBuilder: Generates variant sequences
     - VariantEffectAnalyzer: Analyzes variant effects
     - VariantCompatibilityValidator: Validates variant combinations
     """
-    
+
     def __init__(self, reference_data:params.ReferenceData=None,
             cleavage_params:params.CleavageParams=None,
             variant_pool:VariantRecordPool=None,
@@ -47,22 +51,22 @@ class BruteForceVariantPeptideCaller:
         self.variant_peptides = variant_peptides or set()
         self.selenocysteine_termination = selenocysteine_termination
         self.w2f = w2f
-        
+
         # Helper classes (lazy initialization)
         self._sequence_builder = None
         self._effect_analyzer = None
         self._validator = None
-    
+
     @property
     def sequence_builder(self) -> VariantSequenceBuilder:
         """ Lazy initialization of sequence builder """
         if self._sequence_builder is None:
             self._sequence_builder = VariantSequenceBuilder(
-                self.reference_data, self.tx_model, self.tx_seq, 
+                self.reference_data, self.tx_model, self.tx_seq,
                 self.variant_pool, self.tx_id
             )
         return self._sequence_builder
-    
+
     @property
     def effect_analyzer(self) -> VariantEffectAnalyzer:
         """ Lazy initialization of effect analyzer """
@@ -71,7 +75,7 @@ class BruteForceVariantPeptideCaller:
                 self.tx_seq, self.tx_model, self.tx_id
             )
         return self._effect_analyzer
-    
+
     @property
     def validator(self) -> VariantCompatibilityValidator:
         """ Lazy initialization of validator """
@@ -81,7 +85,7 @@ class BruteForceVariantPeptideCaller:
                 self.variant_pool, self.tx_id
             )
         return self._validator
-    
+
     def create_canonical_peptide_pool(self):
         """ Create canonical peptide pool. """
         proteome = self.reference_data.proteome
@@ -95,14 +99,14 @@ class BruteForceVariantPeptideCaller:
             min_length=par.min_length,
             max_length=par.max_length
         )
-    
+
     def get_start_index(self):
         """ Get the "start index" used for filtering variants. """
         if self.tx_seq.orf:
             self.start_index = self.tx_seq.orf.start + 3
         else:
             self.start_index = 3
-    
+
     def peptide_is_valid(self, peptide:str, denylist:List[str], check_canonical) -> bool:
         """ Check whether the peptide is valid """
         if check_canonical \
@@ -116,12 +120,12 @@ class BruteForceVariantPeptideCaller:
         min_mw = self.cleavage_params.min_mw
         return min_len <= len(peptide) <= max_len \
             and SeqUtils.molecular_weight(peptide, 'protein') >= min_mw
-    
+
     def load_relevant_variants(self, pool:VariantRecordPool):
         """ Load relevant variants. """
         if self.tx_id not in pool:
             return
-        
+
         for variant in pool[self.tx_id].transcriptional:
             self.variant_pool.add_transcriptional_variant(variant)
         for variant in pool[self.tx_id].intronic:
@@ -137,7 +141,7 @@ class BruteForceVariantPeptideCaller:
                 self.variant_pool.add_intronic_variant(v)
         for variant in pool[self.tx_id].circ_rna:
             self.variant_pool.add_circ_rna(variant)
-    
+
     def get_variants(self, tx_id:str, start:int, end:int,
             variant_ids:Iterable[str]=None) -> List[VariantRecord]:
         """ Load variant records associated with the particular transcript. """
@@ -155,7 +159,7 @@ class BruteForceVariantPeptideCaller:
                 variant.to_end_inclusion(self.tx_seq)
             variants.append(variant)
         return variants
-    
+
     @staticmethod
     def find_prev_cds_start_same_frame(cds_start:int, cds_start_positions:List[int]):
         """ find the previous cds start site in the same reading frame. """
@@ -175,8 +179,28 @@ class BruteForceVariantPeptideCaller:
             variants_stop_gain:List[Tuple[bool,bool,bool]],
             variants_silent_mutation:List[Tuple[bool,bool,bool]]
             ) -> List[VariantRecordWithCoordinate]:
-        """ Check whether the given range of the transcript has any variant
-        associated. """
+        """ Identify variants that meaningfully affect the current peptide window.
+
+        This method filters the variant list to find those that have a functional
+        impact on the given peptide slice. The `cds_start` parameter is critical:
+        it defines the frame origin for all position-based checks.
+
+        When multiple in-frame starts exist, `cds_start` should be the most recent
+        upstream start (found via get_last_in_frame_orf), not the current loop's
+        iteration point. This ensures:
+        - Variants between earlier and current starts are correctly flagged
+        - Stop-loss/gain indices are computed relative to the right frame origin
+        - Upstream frameshift tracking works correctly
+
+        Example impact of wrong cds_start:
+        - Starts at 0, 300, 600 (frame 0); variant at 150; current loop at 600
+        - Using cds_start=600: check "600 < 150" → False, variant missed
+        - Using cds_start=0: check "0 < 150" → True, variant correctly identified
+
+        Returns:
+            List of variants that overlap, affect translation, or shift the reading
+            frame within the peptide window [lhs, rhs).
+        """
         effective_variants:List[seqvar.VariantRecordWithCoordinate] = []
         offset = 0
         query = FeatureLocation(start=lhs, end=rhs)
@@ -342,6 +366,15 @@ class BruteForceVariantPeptideCaller:
                 lhs, lrange = site
                 if 0 < next_m < lhs:
                     break
+                # Find the appropriate CDS start for variant effect evaluation.
+                # When multiple in-frame starts exist, we need to anchor variant
+                # checks to the most recent upstream start, not the current loop's
+                # cds_start. This ensures variants between earlier and current
+                # starts are correctly identified as affecting this peptide.
+                # Example: if starts are at nt 0, 300, 600 (all frame 0), and we're
+                # at cds_start=600 with peptide at lhs=150 (AA pos), we use
+                # actual_cds_start=300 to correctly flag variants at nt position
+                # 150 (between the two starts) as relevant.
                 last_inframe_cds = orf_tracker.get_last_in_frame_orf(cds_start, lhs)
                 if last_inframe_cds > -1:
                     actual_cds_start = last_inframe_cds
@@ -557,73 +590,3 @@ class BruteForceVariantPeptideCaller:
                 is_mrna_end_nf=True
             )
             self.variant_peptides.update(peptides)
-
-    def generate_variant_comb(self, fusion:bool, circ_rna:bool
-            ) -> Iterable[seqvar.VariantRecordPool]:
-        """ Generate combination of variants. """
-        variant_type_mapper:Dict[str, Tuple[seqvar.VariantRecord, str]] = {}
-        start_index = self.tx_seq.orf.start + 3 if bool(self.tx_seq.orf) else 3
-        for variant in self.variant_pool[self.tx_id].transcriptional:
-            if variant.location.start == start_index - 1 \
-                    and (variant.is_insertion() or variant.is_deletion()) \
-                    and not variant.is_alternative_splicing():
-                variant.to_end_inclusion(self.tx_seq)
-            var_id = variant.get_minimal_identifier()
-            variant_type_mapper[var_id] = (variant, 'transcriptional')
-        for variant in self.variant_pool[self.tx_id].intronic:
-            var_id = variant.get_minimal_identifier()
-            variant_type_mapper[var_id] = (variant, 'intronic')
-        if fusion:
-            for variant in self.variant_pool[self.tx_id].fusion:
-                if variant.location.start < start_index - 1:
-                    continue
-                var_id = variant.get_minimal_identifier()
-                variant_type_mapper[var_id] = (variant, 'fusion')
-                accepter_tx_id = variant.attrs['ACCEPTER_TRANSCRIPT_ID']
-                if accepter_tx_id not in self.variant_pool:
-                    continue
-                accepter_var_series = self.variant_pool[accepter_tx_id]
-                for accepter_var in accepter_var_series.transcriptional:
-                    var_id = accepter_var.get_minimal_identifier()
-                    variant_type_mapper[var_id] = (accepter_var, 'transcriptional')
-                for accepter_var in accepter_var_series.intronic:
-                    var_id = accepter_var.get_minimal_identifier()
-                    variant_type_mapper[var_id] = (accepter_var, 'intronic')
-        if circ_rna:
-            for variant in self.variant_pool[self.tx_id].circ_rna:
-                var_id = variant.get_minimal_identifier()
-                variant_type_mapper[var_id] = (variant, 'circ_rna')
-
-        all_variants = [v[0] for v in variant_type_mapper.values()]
-
-        for i in range(len(all_variants)):
-            for inds in combinations(range(len(all_variants)), i + 1):
-                variants = [all_variants[i] for i in inds]
-                if fusion \
-                        and not any(variant_type_mapper[v.get_minimal_identifier()][1]
-                                    == 'fusion' for v in variants):
-                    continue
-                if circ_rna \
-                        and not any(variant_type_mapper[v.get_minimal_identifier()][1]
-                                    == 'circ_rna' for v in variants):
-                    continue
-                pool = seqvar.VariantRecordPool()
-                pool.anno = self.variant_pool.anno
-                for variant in variants:
-                    var_id = variant.get_minimal_identifier()
-                    var_type = variant_type_mapper[var_id][1]
-                    tx_id = variant.transcript_id
-                    if var_type == 'transcriptional':
-                        pool.add_transcriptional_variant(variant, tx_id)
-                    elif var_type == 'intronic':
-                        pool.add_intronic_variant(variant, tx_id)
-                    elif var_type == 'fusion':
-                        pool.add_fusion_variant(variant, tx_id)
-                    elif var_type == 'circ_rna':
-                        pool.add_circ_rna(variant, tx_id)
-                pool.sort()
-                if self.validator.has_incompatible_variants(pool):
-                    continue
-                yield pool
-
-
