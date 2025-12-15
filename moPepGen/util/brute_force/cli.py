@@ -97,6 +97,15 @@ def parse_args(subparsers:argparse._SubParsersAction):
         help='Include peptides with W > F (Tryptophan to Phenylalanine) '
         'reassignment.'
     )
+    parser.add_argument(
+        '--peptide-finding-mode',
+        type=str,
+        choices=['misc', 'archipel', 'sliding-window'],
+        default='misc',
+        help='Peptide finding strategy: misc (enzyme-based miscleavage), '
+             'archipel (variant islands with flanking regions), or '
+             'sliding-window (enumerate all 8-11mer variant-containing peptides).'
+    )
     cli_common.add_args_cleavage(parser)
     cli_common.add_args_debug_level(parser)
 
@@ -157,9 +166,11 @@ def main(args):
             enzyme=args.cleavage_rule,
             exception=args.cleavage_exception,
             miscleavage=int(args.miscleavage),
-            min_mw=float(args.min_mw),
+            min_mw=float(args.min_mw) if args.min_mw else None,
             min_length=args.min_length,
-            max_length=args.max_length
+            max_length=args.max_length,
+            peptide_finding_mode=args.peptide_finding_mode,
+            flanking_size=args.flanking_size
         )
 
         caller.create_canonical_peptide_pool()

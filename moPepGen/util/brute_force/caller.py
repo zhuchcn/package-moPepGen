@@ -14,6 +14,7 @@ from .orf_tracker import ORFTracker
 from .sequence_builder import VariantSequenceBuilder
 from .effect_analyzer import VariantEffectAnalyzer
 from .validator import VariantCompatibilityValidator
+from .peptide_site_generator import PeptideSiteGenerator
 
 
 if TYPE_CHECKING:
@@ -331,6 +332,9 @@ class BruteForceVariantPeptideCaller:
                 orf_starts=[cds_start]
             )
 
+        # Create peptide site generator once (reusable for all CDS starts)
+        peptide_gen = PeptideSiteGenerator(self.cleavage_params)
+
         for cds_start in orf_tracker.orf_starts:
             cur_cds_end = len(seq) - (len(seq) - cds_start) % 3
 
@@ -347,7 +351,8 @@ class BruteForceVariantPeptideCaller:
                 aa_seq = aa_seq[:stop_index]
             aa_seq = aa.AminoAcidSeqRecord(seq=aa_seq)
 
-            sites = aa_seq.find_all_enzymatic_cleave_sites_with_ranges(rule, exception)
+            # Generate concrete peptide windows for this CDS start
+            windows = peptide_gen.generate_peptide_windows(aa_seq)
 
             # Finding the next M, so peptides that starts from the next M should
             # be processed with the correct `cds_start`
@@ -360,72 +365,54 @@ class BruteForceVariantPeptideCaller:
             else:
                 next_m = 0
 
-            sites.insert(0, (0, (0,1)))
-            sites.append((len(aa_seq), (len(aa_seq), len(aa_seq))))
-            for j, site in enumerate(sites[:-1]):
-                lhs, lrange = site
+            for lhs, rhs, lrange, rrange in windows:
                 if 0 < next_m < lhs:
                     break
                 # Find the appropriate CDS start for variant effect evaluation.
                 # When multiple in-frame starts exist, we need to anchor variant
                 # checks to the most recent upstream start, not the current loop's
-                # cds_start. This ensures variants between earlier and current
-                # starts are correctly identified as affecting this peptide.
-                # Example: if starts are at nt 0, 300, 600 (all frame 0), and we're
-                # at cds_start=600 with peptide at lhs=150 (AA pos), we use
-                # actual_cds_start=300 to correctly flag variants at nt position
-                # 150 (between the two starts) as relevant.
+                # cds_start.
                 last_inframe_cds = orf_tracker.get_last_in_frame_orf(cds_start, lhs)
-                if last_inframe_cds > -1:
-                    actual_cds_start = last_inframe_cds
+                actual_cds_start = last_inframe_cds if last_inframe_cds > -1 else cds_start
+
+                tx_lhs = cds_start + lhs * 3
+                tx_rhs = cds_start + rhs * 3
+                if is_mrna_end_nf and tx_rhs + 3 > len(seq):
+                    continue
+                peptide = aa_seq.seq[lhs:rhs]
+                is_in_denylist = str(peptide) in denylist \
+                    and (lhs != 0 or str(peptide[1:]) in denylist)
+                if is_in_denylist:
+                    continue
+                tx_lrange = (cds_start + lrange[0] * 3, cds_start + lrange[1] * 3)
+                if rhs == len(aa_seq) \
+                        and tx_rhs + 3 <= len(seq) \
+                        and seq[tx_rhs:tx_rhs + 3].translate() == '*':
+                    tx_rrange = (tx_rhs, tx_rhs + 3)
                 else:
-                    actual_cds_start = cds_start
-
-                # prev_cds_start = self.find_prev_cds_start_same_frame(
-                #     cds_start=actual_cds_start,
-                #     cds_start_positions=cds_start_positions
-                # )
-
-                for k in range(j + 1, min([j + 3, len(sites) - 1]) + 1):
-                    rhs, rrange = sites[k]
-                    tx_lhs = cds_start + lhs * 3
-                    tx_rhs = cds_start + rhs * 3
-                    if is_mrna_end_nf and tx_rhs + 3 > len(seq):
-                        continue
-                    peptide = aa_seq.seq[lhs:rhs]
-                    is_in_denylist = str(peptide) in denylist \
-                        and (not lhs == 0 or str(peptide[1:]) in denylist)
-                    if is_in_denylist:
-                        continue
-                    tx_lrange = (cds_start + lrange[0] * 3, cds_start + lrange[1] * 3)
-                    if k == len(sites) - 1 \
-                            and tx_rhs + 3 <= len(seq) \
-                            and seq[tx_rhs:tx_rhs + 3].translate() == '*':
-                        tx_rrange = (tx_rhs, tx_rhs + 3)
-                    else:
-                        tx_rrange = (cds_start + rrange[0] * 3, cds_start + rrange[1] * 3)
-                    if check_variants:
-                        effective_variants = self.get_effective_variants(
-                            lhs=tx_lhs, rhs=tx_rhs, lrange=tx_lrange, rrange=tx_rrange,
-                            cds_start=actual_cds_start, variants=variant_coordinates,
-                            variants_stop_lost=stop_lost, variants_stop_gain=stop_gain,
-                            variants_silent_mutation=silent_mutation
-                        )
-
-                        if not effective_variants:
-                            continue
-                        if is_fusion and \
-                                not any(v.variant.is_fusion() for v in effective_variants):
-                            continue
-                    else:
-                        effective_variants = []
-
-                    peptide_seqs = self.translational_modification(
-                        peptide, lhs, tx_lhs, effective_variants, denylist,
-                        check_variants, check_canonical, selenocysteine_termination
+                    tx_rrange = (cds_start + rrange[0] * 3, cds_start + rrange[1] * 3)
+                if check_variants:
+                    effective_variants = self.get_effective_variants(
+                        lhs=tx_lhs, rhs=tx_rhs, lrange=tx_lrange, rrange=tx_rrange,
+                        cds_start=actual_cds_start, variants=variant_coordinates,
+                        variants_stop_lost=stop_lost, variants_stop_gain=stop_gain,
+                        variants_silent_mutation=silent_mutation
                     )
-                    for peptide_seq in peptide_seqs:
-                        variant_peptides.add(peptide_seq)
+
+                    if not effective_variants:
+                        continue
+                    if is_fusion and \
+                            not any(v.variant.is_fusion() for v in effective_variants):
+                        continue
+                else:
+                    effective_variants = []
+
+                peptide_seqs = self.translational_modification(
+                    peptide, lhs, tx_lhs, effective_variants, denylist,
+                    check_variants, check_canonical, selenocysteine_termination
+                )
+                for peptide_seq in peptide_seqs:
+                    variant_peptides.add(peptide_seq)
         return variant_peptides
 
     def translational_modification(self, seq:Seq, lhs:int, tx_lhs:int,
