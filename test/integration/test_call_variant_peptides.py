@@ -1504,3 +1504,19 @@ class TestCallVariantPeptides(TestCaseIntegration):
             'cleavage_rule': 'None',
             'peptide_finding_mode': 'sliding-window'
         })
+
+    def test_call_variant_peptide_sliding_window_fuzz90(self):
+        """ Test case from fuzz test that ensures variant peptides are called
+        correctly in sliding-window mode. """
+        fuzz_dir = self.data_dir/'fuzz/90'
+        gvf = [
+            fuzz_dir/'fake_variants.gvf'
+        ]
+        expected = fuzz_dir/'brute_force.txt'
+        reference = fuzz_dir
+        self.default_test_case(gvf, reference, expected, {
+            'peptide_finding_mode': 'sliding-window',
+            'min_length': 8,
+            'max_length': 11,
+            'cleavage_rule': 'None'
+        })

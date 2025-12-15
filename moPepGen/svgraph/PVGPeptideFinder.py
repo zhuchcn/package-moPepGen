@@ -1108,11 +1108,14 @@ class PVGPeptideFinder():
             cur_path = queue.pop()
             cur_len = len(cur_path)  # Number of amino acids
 
+            if cur_len > max_length:
+                continue
+
             # If we have at least min_length AA, emit all windows from min to max length
             if cur_len >= min_length:
                 for window_len in range(min_length, min(max_length, cur_len) + 1):
-                    # Take first window_len nodes
-                    window_nodes = cur_path.nodes[:window_len]
+                    # Take last window_len nodes
+                    window_nodes = cur_path.nodes[-window_len:]
 
                     # Check if window contains any variants
                     has_variant = any(
@@ -1136,10 +1139,6 @@ class PVGPeptideFinder():
                     )
                     paths.data.append(window_path)
 
-            # Stop extending if we've reached max_length
-            if cur_len >= max_length:
-                continue
-
             # Extend by one more node
             cur_node = cur_path.nodes[-1]
             for out_node in cur_node.out_nodes:
@@ -1157,6 +1156,9 @@ class PVGPeptideFinder():
 
                 # Extend path
                 new_path = copy.copy(cur_path)
+                if cur_len == max_length:
+                    # Slide window: remove first node, add new node
+                    new_path.nodes = new_path.nodes[1:]
                 new_path.append(out_node)
 
                 # Get additional variants

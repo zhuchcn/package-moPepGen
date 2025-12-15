@@ -641,8 +641,8 @@ class FuzzTestCase():
         args.peptide_finding_mode = self.config.peptide_finding_mode
         args.miscleavage = 2
         args.min_mw = 500.
-        args.min_length = 7
-        args.max_length = 25
+        args.min_length = self.config.min_length
+        args.max_length = self.config.max_length
         args.flanking_size = self.config.flanking_size
         args.threads = 1
         args.max_variants_per_node = (9, )
