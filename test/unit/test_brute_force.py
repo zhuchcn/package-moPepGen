@@ -3,10 +3,23 @@ import unittest
 from Bio.Seq import Seq
 
 from moPepGen import aa, params
-from moPepGen.util.brute_force.peptide_site_generator import PeptideSiteGenerator
+from moPepGen.util.brute_force.peptide_candidate_generator import PeptideCandidateGenerator
 
 
-def _make_generator(miscleavage: int, min_len: int = 7, max_len: int = 25) -> PeptideSiteGenerator:
+class _DummyTracker:
+    def get_next_in_frame_orf(self, _cds_start:int):
+        return -1
+
+    def get_last_in_frame_orf(self, _cds_start:int, _lhs:int):
+        return -1
+
+
+class _DummyEffectAnalyzer:
+    def has_any_stop_codon_between(self, *_args, **_kwargs):
+        return False
+
+
+def _make_generator(miscleavage: int, min_len: int = 7, max_len: int = 25) -> PeptideCandidateGenerator:
     cp = params.CleavageParams(
         enzyme='trypsin',
         exception=None,
@@ -15,11 +28,27 @@ def _make_generator(miscleavage: int, min_len: int = 7, max_len: int = 25) -> Pe
         max_length=max_len,
         peptide_finding_mode='misc'
     )
-    return PeptideSiteGenerator(cp)
+    # Minimal generator for misc mode tests: no variants, not coding, no fusion/circ.
+    return PeptideCandidateGenerator(
+        cleavage_params=cp,
+        seq=Seq(''),
+        is_coding=False,
+        is_fusion=False,
+        is_circ_rna=False,
+        is_mrna_end_nf=False,
+        check_variants=False,
+        variants=[],
+        stop_lost=[],
+        stop_gain=[],
+        silent_mutation=[],
+        denylist=set(),
+        orf_tracker=_DummyTracker(),
+        effect_analyzer=_DummyEffectAnalyzer(),
+    )
 
 
-class TestBruteForcePeptideSiteGenerator(unittest.TestCase):
-    """Unit tests for PeptideSiteGenerator (brute_force)."""
+class TestBruteForcePeptideCandidateGenerator(unittest.TestCase):
+    """Unit tests for PeptideCandidateGenerator (brute_force)."""
 
     def test_misc_windows_miscleavage_combinations(self):
         """Misc mode should combine adjacent cleavage sites up to miscleavage.
@@ -32,8 +61,8 @@ class TestBruteForcePeptideSiteGenerator(unittest.TestCase):
         seq = aa.AminoAcidSeqRecord(seq=Seq('MKAQRAA'))
         gen = _make_generator(miscleavage=1)
 
-        windows = gen.generate_peptide_windows(seq)
-        pairs = {(lhs, rhs) for (lhs, rhs, _lrange, _rrange) in windows}
+        candidates = list(gen.generate_peptide_candidates(seq, cds_start=0))
+        pairs = {(c.lhs, c.rhs) for c in candidates}
 
         expected = {(0, 2), (2, 5), (5, 7), (0, 5), (2, 7)}
         self.assertEqual(pairs, expected)
@@ -48,7 +77,7 @@ class TestBruteForcePeptideSiteGenerator(unittest.TestCase):
         seq = aa.AminoAcidSeqRecord(seq=Seq('M' + 'A' * 25))
         gen = _make_generator(miscleavage=2, min_len=7, max_len=25)
 
-        windows = gen.generate_peptide_windows(seq)
-        pairs = {(lhs, rhs) for (lhs, rhs, _lrange, _rrange) in windows}
+        candidates = list(gen.generate_peptide_candidates(seq, cds_start=0))
+        pairs = {(c.lhs, c.rhs) for c in candidates}
         self.assertIn((0, 26), pairs)
 

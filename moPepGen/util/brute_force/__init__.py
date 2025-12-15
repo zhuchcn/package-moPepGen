@@ -11,4 +11,4 @@ from .orf_tracker import ORFTracker
 from .cli import parse_args, main
 from .utils import create_mnvs, fix_indel_after_start_codon
 from .caller import BruteForceVariantPeptideCaller
-from .peptide_site_generator import PeptideSiteGenerator
+from .peptide_candidate_generator import PeptideCandidateGenerator
