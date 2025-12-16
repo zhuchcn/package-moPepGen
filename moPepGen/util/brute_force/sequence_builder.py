@@ -12,14 +12,14 @@ from moPepGen.seqvar.VariantRecordWithCoordinate import VariantRecordWithCoordin
 class VariantSequenceBuilder:
     """
     Handles all variant sequence generation logic.
-    
+
     Responsibilities:
     - Apply variants to sequences
     - Handle fusion variants
     - Handle circRNA variants
     - Track selenocysteine positions
     """
-    
+
     def __init__(self, reference_data, tx_model, tx_seq, variant_pool, tx_id):
         self.reference_data = reference_data
         self.tx_model = tx_model
@@ -27,7 +27,7 @@ class VariantSequenceBuilder:
         self.variant_pool = variant_pool
         self.tx_id = tx_id
         self.gene_seq = None  # Cached
-    
+
     def get_gene_seq(self) -> dna.DNASeqRecord:
         """ Get the gene sequence and cache it if not already cached. """
         if self.gene_seq:
@@ -37,13 +37,13 @@ class VariantSequenceBuilder:
         chrom = gene_model.chrom
         self.gene_seq = gene_model.get_gene_sequence(self.reference_data.genome[chrom])
         return self.gene_seq
-    
+
     def get_variant_ref_seq(self, variant:VariantRecord) -> Seq:
         """ Get the reference sequence of a variant """
         if variant.type in ['Deletion', 'Substitution']:
             return self.tx_seq.seq[variant.location.start:variant.location.end]
         return variant.ref
-    
+
     def get_variant_sequence(self, seq:Seq, location:FeatureLocation,
             offset:int, variants:List[VariantRecord],
             pool:VariantRecordPool
@@ -66,11 +66,11 @@ class VariantSequenceBuilder:
                     alt_seq = var_seq[start:start+1]
                     local_offset = local_offset + len(alt_seq) - len(variant.location)
                     var_seq = var_seq[:start] + alt_seq + var_seq[end:]
-                
+
                 elif variant.type == 'Insertion':
                     start = variant.location.start + local_offset - location.start
                     end = variant.location.end + local_offset - location.start
-                    
+
                     gene_seq = self.get_gene_seq()
                     donor_start = variant.get_donor_start()
                     donor_end = variant.get_donor_end()
@@ -82,7 +82,7 @@ class VariantSequenceBuilder:
                         seq=alt_seq, location=loc, offset=start,
                         variants=insert_variants, pool=pool
                     )
-                    
+
                     variant_coordinate = VariantRecordWithCoordinate(
                         variant=variant,
                         location=FeatureLocation(start=start, end=start + len(alt_seq) + 1)
@@ -91,11 +91,11 @@ class VariantSequenceBuilder:
                     variant_coordinates += insert_variants
                     local_offset = local_offset + len(alt_seq) + 1 - len(variant.location)
                     var_seq = var_seq[:start+1] + alt_seq + var_seq[end:]
-                
+
                 elif variant.type == 'Substitution':
                     start = variant.location.start + local_offset - location.start
                     end = variant.location.end + local_offset - location.start
-                    
+
                     gene_seq = self.get_gene_seq()
                     donor_start = variant.get_donor_start()
                     donor_end = variant.get_donor_end()
@@ -107,7 +107,7 @@ class VariantSequenceBuilder:
                         seq=alt_seq, location=loc, offset=start,
                         variants=insert_variants, pool=pool
                     )
-                    
+
                     variant_coordinate = VariantRecordWithCoordinate(
                         variant=variant,
                         location=FeatureLocation(start=start, end=start + len(alt_seq))
@@ -116,7 +116,7 @@ class VariantSequenceBuilder:
                     variant_coordinates += insert_variants
                     local_offset = local_offset + len(alt_seq) - len(variant.location)
                     var_seq = var_seq[:start] + alt_seq + var_seq[end:]
-            
+
             else:
                 start = variant.location.start + local_offset - location.start
                 end = variant.location.end + local_offset - location.start
@@ -127,13 +127,13 @@ class VariantSequenceBuilder:
                     variant=variant,
                     location=loc
                 )
-                
+
                 variant_coordinates.append(variant_coordinate)
                 local_offset = local_offset + len(variant.alt) - len(variant.ref)
                 var_seq = var_seq[:start] + variant.alt + var_seq[end:]
-        
+
         return var_seq, variant_coordinates
-    
+
     def get_variant_sequence_circ_rna(self, seq:Seq, variants:VariantRecordPool
             ) -> Tuple[Seq, List[VariantRecordWithCoordinate]]:
         """ Get the variant sequence of circRNA """
@@ -145,7 +145,7 @@ class VariantSequenceBuilder:
         circ = variants[self.tx_id].circ_rna[0]
         var_seq = Seq('')
         vars_coord = []
-        
+
         for fragment in circ.fragments:
             loc = FeatureLocation(
                 start=int(fragment.location.start), end=int(fragment.location.end)
@@ -166,7 +166,7 @@ class VariantSequenceBuilder:
             )
             var_seq += frag_seq
             vars_coord += frag_vars_coord
-        
+
         location = FeatureLocation(
             seqname=circ.gene_id,
             start=min(x.location.start for x in circ.fragments),
@@ -179,10 +179,10 @@ class VariantSequenceBuilder:
             _type='circRNA',
             _id=circ.id
         )
-        
+
         vars_aloop = copy.deepcopy(vars_coord)
         seq_aloop = copy.deepcopy(var_seq)
-        
+
         for _ in range(3):
             offset = len(var_seq)
             vars_extend = copy.deepcopy(vars_aloop)
@@ -195,14 +195,14 @@ class VariantSequenceBuilder:
                 variant.location = location
             var_seq += seq_aloop
             vars_coord += vars_extend
-        
+
         circ_var_coord = VariantRecordWithCoordinate(
             variant=circ_var, location=FeatureLocation(start=0, end=len(var_seq))
         )
         vars_coord.insert(0, circ_var_coord)
-        
+
         return var_seq, vars_coord
-    
+
     def get_variant_sequence_fusion(self, seq:Seq, variants:VariantRecordPool
             ) -> Tuple[Seq, List[VariantRecordWithCoordinate]]:
         """ Get variant sequence with fusion. """
@@ -218,17 +218,17 @@ class VariantSequenceBuilder:
             seq=var_seq, location=location, offset=0,
             variants=variants[self.tx_id].transcriptional, pool=variants
         )
-        
+
         left_insert_start = fusion.attrs['LEFT_INSERTION_START']
         left_insert_end = fusion.attrs['LEFT_INSERTION_END']
         right_insert_start = fusion.attrs['RIGHT_INSERTION_START']
         right_insert_end = fusion.attrs['RIGHT_INSERTION_END']
         right_tx_id = fusion.attrs['ACCEPTER_TRANSCRIPT_ID']
         right_gene_id = fusion.attrs['ACCEPTER_GENE_ID']
-        
+
         additional_seq = Seq('')
         additional_variants:List[VariantRecordWithCoordinate] = []
-        
+
         # left insertion
         if left_insert_start is not None:
             gene_seq = self.get_gene_seq()
@@ -251,7 +251,7 @@ class VariantSequenceBuilder:
             insert_variants.insert(0, insert_fusion)
             additional_seq += insert_seq
             additional_variants += insert_variants
-        
+
         # right insertion
         if right_insert_start is not None:
             gene_model = self.reference_data.anno.genes[right_gene_id]
@@ -275,7 +275,7 @@ class VariantSequenceBuilder:
             insert_variants.insert(0, insert_fusion)
             additional_seq += insert_seq
             additional_variants += insert_variants
-        
+
         right_tx_model = self.reference_data.anno.transcripts[right_tx_id]
         accepter_chrom = right_tx_model.transcript.location.seqname
         breakpoint_gene = fusion.get_accepter_position()
@@ -295,29 +295,29 @@ class VariantSequenceBuilder:
             variants=variants[right_tx_id].transcriptional if right_tx_id in variants else [],
             pool=variants
         )
-        
+
         location = FeatureLocation(
             start=len(var_seq) + len(additional_seq),
             end=len(var_seq) + len(additional_seq) + len(insert_seq)
         )
         fusion_var = VariantRecordWithCoordinate(variant=fusion, location=location)
         insert_variants.insert(0, fusion_var)
-        
+
         additional_seq += insert_seq
         additional_variants += insert_variants
-        
+
         var_seq += additional_seq
         variant_coordinates += additional_variants
-        
+
         return var_seq, variant_coordinates
-    
+
     def get_sec_positions(self, variants:List[VariantRecordWithCoordinate]) -> List[int]:
         """ Get Sec positions in the altered sequence. """
         sec_iter = iter(self.tx_seq.selenocysteine)
         var_iter = iter(variants)
         sec_i = next(sec_iter, None)
         var_i = next(var_iter, None)
-        
+
         sec_positions = []
         offset = 0
         fusion_breakpoint = None
@@ -334,7 +334,7 @@ class VariantSequenceBuilder:
                     offset += (alt_len - ref_len)
                     var_i = next(var_iter, None)
                     continue
-                
+
                 if var_i.variant.type == 'Deletion':
                     # Because for Deletion, the sequence after the REF
                     # nucleotide is deleted so the first nucleotide is unchanged.
@@ -344,7 +344,7 @@ class VariantSequenceBuilder:
                     )
                 else:
                     var_loc = var_i.variant.location
-                
+
                 if var_loc.overlaps(sec_i):
                     sec_i = next(sec_iter, None)
                     continue

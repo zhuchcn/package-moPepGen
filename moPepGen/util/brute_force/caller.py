@@ -182,8 +182,6 @@ class BruteForceVariantPeptideCaller:
         variant_peptides = set()
         tx_model = self.tx_model
         tx_seq = self.tx_seq
-        rule = self.cleavage_params.enzyme
-        exception = self.cleavage_params.exception
         chrom = tx_model.transcript.chrom
         codon_table = self.reference_data.codon_tables[chrom].codon_table
         start_codons = self.reference_data.codon_tables[chrom].start_codons

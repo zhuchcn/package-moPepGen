@@ -7,19 +7,24 @@ from moPepGen.util.brute_force.peptide_candidate_generator import PeptideCandida
 
 
 class _DummyTracker:
+    """ Dummy ORFTracker for testing. """
     def get_next_in_frame_orf(self, _cds_start:int):
+        """ Get the next in-frame ORF. """
         return -1
 
     def get_last_in_frame_orf(self, _cds_start:int, _lhs:int):
+        """ Get the last in-frame ORF before lhs. """
         return -1
 
-
 class _DummyEffectAnalyzer:
+    """ Dummy VariantEffectAnalyzer for testing. """
     def has_any_stop_codon_between(self, *_args, **_kwargs):
+        """ Check if there is any stop codon between positions. """
         return False
 
 
 def _make_generator(miscleavage: int, min_len: int = 7, max_len: int = 25) -> PeptideCandidateGenerator:
+    """ Create a minimal PeptideCandidateGenerator for misc mode testing. """
     cp = params.CleavageParams(
         enzyme='trypsin',
         exception=None,
@@ -80,4 +85,3 @@ class TestBruteForcePeptideCandidateGenerator(unittest.TestCase):
         candidates = list(gen.generate_peptide_candidates(seq, cds_start=0))
         pairs = {(c.lhs, c.rhs) for c in candidates}
         self.assertIn((0, 26), pairs)
-

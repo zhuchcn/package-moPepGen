@@ -1,4 +1,5 @@
 """ Module to test PVGNode """
+# pylint: disable=wrong-import-order
 from collections import deque
 import unittest
 from moPepGen.svgraph import PVGNode

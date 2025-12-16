@@ -183,8 +183,7 @@ class PeptideCandidateGenerator:
                 windows.append((lhs, rhs, (lhs, lhs + 1), (rhs, rhs + 1)))
         return windows
 
-    def _generate_archipel_windows(self, aa_seq:AminoAcidSeqRecord,
-            List, cds_start: int
+    def _generate_archipel_windows(self, aa_seq:AminoAcidSeqRecord, cds_start: int
             ) -> List[Tuple[int, int, Tuple[int, int], Tuple[int, int]]]:
         """Generate archipel windows based on variant islands and flanking.
 

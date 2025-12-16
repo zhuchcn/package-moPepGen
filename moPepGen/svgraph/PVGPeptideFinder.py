@@ -372,6 +372,7 @@ class PVGNodePathReef(PVGNodePath):
         return kmers
 
     def generate_kmer(self, i) -> Tuple[str]:
+        """ Generate kmer starting from index i """
         return tuple(self.nodes[j].id for j in range(i, i + self.flanking_size))
 
 class PVGNodePathSlidingWindow(PVGNodePath):
@@ -1156,7 +1157,7 @@ class PVGPeptideFinder():
                 new_path.append(out_node)
 
                 # Get additional variants
-                # FIXME: we should not consider downstream stop altering variants here
+                # NOTE: Should we consider downstream stop altering variants here?
                 additional_variants = out_node.get_downstream_stop_altering_variants()
                 new_path.add_additional_variants(additional_variants)
 

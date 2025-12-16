@@ -1,7 +1,4 @@
 """ moPepGen util module """
-
-PROG_NAME = 'moPepGen-util'
-
 # Import all util modules to make them accessible as util.module_name
 # This is required for __main__.py which accesses them as:
 #   util.brute_force.parse_args(subparsers)
@@ -17,3 +14,5 @@ from . import validate_novel_orf_calling
 from . import add_fuzz_test_log
 from . import common
 from . import ResourcesMonitor
+
+PROG_NAME = 'moPepGen-util'
