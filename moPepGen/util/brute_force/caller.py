@@ -98,7 +98,8 @@ class BruteForceVariantPeptideCaller:
             miscleavage=par.miscleavage,
             min_mw=par.min_mw,
             min_length=par.min_length,
-            max_length=par.max_length
+            max_length=par.max_length,
+            mode=par.peptide_finding_mode
         )
 
     def get_start_index(self):

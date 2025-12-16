@@ -3,6 +3,7 @@
 from __future__ import annotations
 from typing import Set, TYPE_CHECKING
 from Bio import SeqIO
+from moPepGen import constant
 from moPepGen.aa.AminoAcidSeqRecord import AminoAcidSeqRecord
 from moPepGen.version import MetaVersion
 
@@ -59,7 +60,7 @@ class AminoAcidSeqDict(dict):
                 )
             self[record.transcript_id] = record
 
-    def create_unique_peptide_pool(self, anno:GenomicAnnotation,
+    def create_unique_peptide_pool(self, anno:GenomicAnnotation, mode:str,
             rule:str, exception:str=None, miscleavage:int=2, min_mw:float=500.,
             min_length:int=7, max_length:int=25)->Set[str]:
         """ Create a unique piptide pool.
@@ -76,8 +77,13 @@ class AminoAcidSeqDict(dict):
         sometimes the start codon methionine is cleaved spontaneously inside the
         cell.
 
+        For archipel mode, canonical peptides are not used, so an empty set is
+        returned.
+
         Args:
             anno (GenomicAnnotation): Genomic annotation parsed from GTF.
+            mode (str): Peptide finding mode, can be 'misc', 'archipel', or
+                'sliding-window'.
             rule (str): The rule for enzymatic cleavage, e.g., trypsin.
             exception (str): The exception for cleavage rule.
             start (int): Index to start searching.
@@ -92,6 +98,8 @@ class AminoAcidSeqDict(dict):
             A set of unique peptides as string.
         """
         pool = set()
+        if mode == 'archipel':
+            return pool # archipel mode does not use canonical peptides
         protein: AminoAcidSeqRecord
         it = iter(self.values())
         protein = next(it, None)
@@ -108,22 +116,30 @@ class AminoAcidSeqDict(dict):
             if stop_site > -1:
                 protein = protein[:stop_site]
 
-            try:
-                peptides = protein.enzymatic_cleave(
-                    rule=rule,
-                    exception=exception,
-                    miscleavage=miscleavage,
-                    min_mw=min_mw,
-                    min_length=min_length,
-                    max_length=max_length,
-                    cds_start_nf=cds_start_nf
-                )
-            except ValueError as e:
-                msg = "'X' is not a valid unambiguous letter for protein"
-                if e.args[0] == msg:
-                    protein.seq = protein.seq.split('X')[0]
-                    continue
-                raise e
+            if mode == constant.PeptideFindingMode.SLIDING_WINDOW.value:
+                # In sliding-window mode, we do not cleave the protein.
+                peptides = []
+                seq_len = len(protein.seq)
+                for start in range(0, seq_len - min_length + 1):
+                    for end in range(start + min_length, min(start + max_length, seq_len) + 1):
+                        peptides.append(protein[start:end])
+            else:
+                try:
+                    peptides = protein.enzymatic_cleave(
+                        rule=rule,
+                        exception=exception,
+                        miscleavage=miscleavage,
+                        min_mw=min_mw,
+                        min_length=min_length,
+                        max_length=max_length,
+                        cds_start_nf=cds_start_nf
+                    )
+                except ValueError as e:
+                    msg = "'X' is not a valid unambiguous letter for protein"
+                    if e.args[0] == msg:
+                        protein.seq = protein.seq.split('X')[0]
+                        continue
+                    raise e
             for peptide in peptides:
                 pool.add(str(peptide.seq))
                 # Convert all I with L and add to the canonical peptide pool.
