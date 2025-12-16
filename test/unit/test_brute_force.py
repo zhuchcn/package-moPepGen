@@ -23,7 +23,8 @@ class _DummyEffectAnalyzer:
         return False
 
 
-def _make_generator(miscleavage: int, min_len: int = 7, max_len: int = 25) -> PeptideCandidateGenerator:
+def _make_generator(miscleavage: int, min_len: int = 7, max_len: int = 25
+        ) -> PeptideCandidateGenerator:
     """ Create a minimal PeptideCandidateGenerator for misc mode testing. """
     cp = params.CleavageParams(
         enzyme='trypsin',

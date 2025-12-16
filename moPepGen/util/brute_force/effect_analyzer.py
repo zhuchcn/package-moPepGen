@@ -2,7 +2,6 @@
 import math
 from typing import List, Tuple
 from Bio.Seq import Seq
-from moPepGen import seqvar
 from moPepGen.SeqFeature import FeatureLocation
 from moPepGen.seqvar.VariantRecord import VariantRecord
 from moPepGen.seqvar.VariantRecordWithCoordinate import VariantRecordWithCoordinate

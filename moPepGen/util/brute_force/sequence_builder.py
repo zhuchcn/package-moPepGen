@@ -2,7 +2,7 @@
 import copy
 from typing import List, Tuple
 from Bio.Seq import Seq
-from moPepGen import seqvar, dna, constant
+from moPepGen import dna, constant
 from moPepGen.SeqFeature import FeatureLocation, SeqFeature
 from moPepGen.seqvar.VariantRecord import VariantRecord
 from moPepGen.seqvar.VariantRecordPool import VariantRecordPool

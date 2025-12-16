@@ -1,6 +1,6 @@
 """ Variant compatibility validator """
 from typing import List, Dict
-from moPepGen import seqvar, constant
+from moPepGen import constant
 from moPepGen.SeqFeature import FeatureLocation
 from moPepGen.seqvar.VariantRecord import VariantRecord
 from moPepGen.seqvar.VariantRecordPool import VariantRecordPool

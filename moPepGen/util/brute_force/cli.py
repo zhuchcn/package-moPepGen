@@ -5,7 +5,6 @@ from typing import Set
 from pathlib import Path
 from moPepGen import seqvar, params
 from moPepGen.cli import common as cli_common
-from moPepGen.seqvar.VariantRecordPool import VariantRecordPool
 from .caller import BruteForceVariantPeptideCaller
 from .utils import create_mnvs, fix_indel_after_start_codon
 

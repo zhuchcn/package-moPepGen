@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 @dataclasses.dataclass
 class DefaultPeptideParams:
+    """ Default peptide parameters for different modes. """
     min_mw: int
     min_length: int
     max_length: int
