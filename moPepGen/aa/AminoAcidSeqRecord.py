@@ -21,6 +21,9 @@ class AminoAcidSeqRecord(SeqRecord):
             gene_name:str=None, **kwargs):
         self.id = None
         self.name = None
+        for k in list(kwargs.keys()):
+            if k in ['id', 'name', 'description']:
+                kwargs.pop(k)
         super().__init__(seq, id=_id, name=name, description=description,
             **kwargs)
         self.gene_id = gene_id

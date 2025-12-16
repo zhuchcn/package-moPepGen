@@ -1,0 +1,9 @@
+chrF	.	gene	1	2977	.	+	.	 gene_id FAKEG00000387; transcript_id FAKET00000387; protein_id FAKEP00000387;
+chrF	.	transcript	1	2977	.	+	.	 gene_id FAKEG00000387; transcript_id FAKET00000387; protein_id FAKEP00000387; is_protein_coding false;
+chrF	.	exon	1	240	.	+	.	 gene_id FAKEG00000387; transcript_id FAKET00000387; protein_id FAKEP00000387;
+chrF	.	exon	515	781	.	+	.	 gene_id FAKEG00000387; transcript_id FAKET00000387; protein_id FAKEP00000387;
+chrF	.	exon	824	886	.	+	.	 gene_id FAKEG00000387; transcript_id FAKET00000387; protein_id FAKEP00000387;
+chrF	.	exon	1209	1435	.	+	.	 gene_id FAKEG00000387; transcript_id FAKET00000387; protein_id FAKEP00000387;
+chrF	.	exon	1764	1868	.	+	.	 gene_id FAKEG00000387; transcript_id FAKET00000387; protein_id FAKEP00000387;
+chrF	.	exon	2198	2368	.	+	.	 gene_id FAKEG00000387; transcript_id FAKET00000387; protein_id FAKEP00000387;
+chrF	.	exon	2698	2977	.	+	.	 gene_id FAKEG00000387; transcript_id FAKET00000387; protein_id FAKEP00000387;

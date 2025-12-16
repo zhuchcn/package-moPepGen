@@ -323,6 +323,7 @@ def load_references(args:argparse.Namespace, load_genome:bool=True,
         if load_canonical_peptides:
             canonical_peptides = proteome.create_unique_peptide_pool(
                 anno=anno,
+                mode=cleavage_params.peptide_finding_mode,
                 rule=cleavage_params.enzyme,
                 exception=cleavage_params.exception,
                 miscleavage=cleavage_params.miscleavage,

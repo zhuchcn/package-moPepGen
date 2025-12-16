@@ -372,6 +372,7 @@ class PVGNodePathReef(PVGNodePath):
         return kmers
 
     def generate_kmer(self, i) -> Tuple[str]:
+        """ Generate kmer starting from index i """
         return tuple(self.nodes[j].id for j in range(i, i + self.flanking_size))
 
 class PVGNodePathSlidingWindow(PVGNodePath):
@@ -1108,35 +1109,31 @@ class PVGPeptideFinder():
             cur_path = queue.pop()
             cur_len = len(cur_path)  # Number of amino acids
 
-            # If we have at least min_length AA, emit all windows from min to max length
+            if cur_len > max_length:
+                continue
+
             if cur_len >= min_length:
-                for window_len in range(min_length, min(max_length, cur_len) + 1):
-                    # Take first window_len nodes
-                    window_nodes = cur_path.nodes[:window_len]
+                # Check if window contains any variants
+                has_variant = any(
+                    any(not v.is_silent for v in n.variants)
+                    for n in cur_path.nodes
+                )
+                has_variant |= any(len(o.start_gain) > 0 for o in orfs)
 
-                    # Check if window contains any variants
-                    has_variant = any(
-                        any(not v.is_silent for v in n.variants)
-                        for n in window_nodes
-                    )
+                if backsplicing_only:
+                    subgraph_ids = set().union(*[n.get_subgraph_id_set() for n in cur_path.nodes])
+                    flag_backsplicing = len(subgraph_ids) > 1
+                else:
+                    flag_backsplicing = True
 
-                    if not has_variant:
-                        continue
-
-                    # Check backsplicing requirement for circRNA
-                    if backsplicing_only:
-                        subgraph_ids = set().union(*[n.get_subgraph_id_set() for n in window_nodes])
-                        if len(subgraph_ids) <= 1:
-                            continue
-
+                if has_variant and flag_backsplicing:
                     # Create window path and add to results
                     window_path = PVGNodePath(
-                        nodes=list(window_nodes),
+                        nodes=list(cur_path.nodes),
                         additional_variants=set()
                     )
                     paths.data.append(window_path)
 
-            # Stop extending if we've reached max_length
             if cur_len >= max_length:
                 continue
 
@@ -1160,6 +1157,7 @@ class PVGPeptideFinder():
                 new_path.append(out_node)
 
                 # Get additional variants
+                # NOTE: Should we consider downstream stop altering variants here?
                 additional_variants = out_node.get_downstream_stop_altering_variants()
                 new_path.add_additional_variants(additional_variants)
 

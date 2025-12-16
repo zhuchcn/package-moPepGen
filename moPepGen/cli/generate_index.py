@@ -46,6 +46,13 @@ def add_subparser_generate_index(subparsers:argparse._SubParsersAction):
         action='store_true',
         help='Force write data to index dir.'
     )
+    p.add_argument(
+        '--peptide-finding-mode',
+        type=str,
+        choices=[mode.value for mode in params.constant.PeptideFindingMode],
+        default='misc',
+        help='The mode to find peptides for canonical peptide pool generation.'
+    )
     common.add_args_reference(p, index=False)
     common.add_args_cleavage(p)
     common.add_args_debug_level(p)
@@ -65,7 +72,9 @@ def generate_index(args:argparse.Namespace):
         miscleavage=args.miscleavage,
         min_mw=args.min_mw,
         min_length = args.min_length,
-        max_length = args.max_length
+        max_length = args.max_length,
+        peptide_finding_mode=args.peptide_finding_mode,
+        flanking_size=args.flanking_size
     )
 
     invalid_protein_as_noncoding:bool = args.invalid_protein_as_noncoding
@@ -138,15 +147,16 @@ def generate_index(args:argparse.Namespace):
         logger.info('No cleavage rule specified. Skip generating canonical peptides.')
     else:
         canonical_peptides = proteome.create_unique_peptide_pool(
-            anno=anno, rule=cp.enzyme, exception=cp.exception, miscleavage=cp.miscleavage,
-            min_mw=cp.min_mw, min_length = cp.min_length, max_length = cp.max_length
+            anno=anno, mode=cp.peptide_finding_mode, rule=cp.enzyme, exception=cp.exception,
+            miscleavage=cp.miscleavage, min_mw=cp.min_mw, min_length = cp.min_length,
+            max_length = cp.max_length
         )
-        cleavage_params = params.CleavageParams(
-            enzyme=cp.enzyme, exception=cp.exception, miscleavage=cp.miscleavage,
-            min_mw=cp.min_mw, min_length = cp.min_length, max_length = cp.max_length
-        )
+        # cleavage_params = params.CleavageParams(
+        #     enzyme=cp.enzyme, exception=cp.exception, miscleavage=cp.miscleavage,
+        #     min_mw=cp.min_mw, min_length = cp.min_length, max_length = cp.max_length
+        # )
         logger.info('canonical peptide pool generated.')
-        index_dir.save_canonical_peptides(canonical_peptides, cleavage_params)
+        index_dir.save_canonical_peptides(canonical_peptides, cp)
         logger.info('canonical peptide pool saved to disk.')
 
     # create list of coding transcripts

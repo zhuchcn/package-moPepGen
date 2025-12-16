@@ -1,4 +1,5 @@
 """ Test Module for VariantPeptideDict """
+# pylint: disable=wrong-import-order
 import unittest
 from test.unit import create_variants
 from Bio.Seq import Seq

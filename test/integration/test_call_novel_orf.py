@@ -139,7 +139,10 @@ class TestCallNovelORFPeptides(TestCaseIntegration):
         proteome = aa.AminoAcidSeqDict()
         proteome.dump_fasta(args.proteome_fasta)
         canonical_peptides = proteome.create_unique_peptide_pool(
-            anno=anno, rule='trypsin', exception='trypsin_exception'
+            anno=anno,
+            mode='misc',
+            rule='trypsin',
+            exception='trypsin_exception'
         )
         canonical_peptides = set(canonical_peptides)
 

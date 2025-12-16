@@ -1,5 +1,6 @@
 """ Module to test PeptideVariantGraph """
-from typing import Tuple, Dict, List
+# pylint: disable=wrong-import-order
+from __future__ import annotations
 from collections import deque
 import unittest
 from moPepGen.svgraph.PVGOrf import PVGOrf
@@ -792,7 +793,7 @@ class TestPeptideVariantGraph(unittest.TestCase):
             3: ('L', [1], [v1], [], 0),
             4: ('GHPKLS', [2,3], [None], [((0,6),(6,12))], 0)
         }
-        graph, nodes = create_pgraph(data, 'ENST0001')
+        graph, _ = create_pgraph(data, 'ENST0001')
         graph.known_orf = [0, 36]
         graph.create_atomic_graph()
 
@@ -803,7 +804,7 @@ class TestPeptideVariantGraph(unittest.TestCase):
         )
 
         # Should generate windows containing the variant (position 5)
-        variant_peptides = [str(seq) for seq in peptides.keys()]
+        variant_peptides = [str(seq) for seq in peptides]
 
         # Should have variant peptides
         self.assertGreater(len(variant_peptides), 0)
@@ -835,7 +836,7 @@ class TestPeptideVariantGraph(unittest.TestCase):
             check_variants=True
         )
 
-        variant_peptides = [str(seq) for seq in peptides.keys()]
+        variant_peptides = [str(seq) for seq in peptides]
         self.assertGreater(len(variant_peptides), 0)
 
     def test_sliding_window_edge_start(self):
@@ -856,7 +857,7 @@ class TestPeptideVariantGraph(unittest.TestCase):
             check_variants=True
         )
 
-        variant_peptides = [str(seq) for seq in peptides.keys()]
+        variant_peptides = [str(seq) for seq in peptides]
         self.assertGreater(len(variant_peptides), 0)
 
         # Should have windows with G (variant) near start
@@ -880,7 +881,7 @@ class TestPeptideVariantGraph(unittest.TestCase):
             check_variants=True
         )
 
-        variant_peptides = [str(seq) for seq in peptides.keys()]
+        variant_peptides = [str(seq) for seq in peptides]
         self.assertGreater(len(variant_peptides), 0)
 
         # Should have windows ending with G (variant)
@@ -905,7 +906,7 @@ class TestPeptideVariantGraph(unittest.TestCase):
             check_variants=True
         )
 
-        variant_peptides = [str(seq) for seq in peptides.keys()]
+        variant_peptides = [str(seq) for seq in peptides]
         # With 8 AA total and variant at position 4, should generate at least one 8mer
         self.assertGreater(len(variant_peptides), 0)
         # Should have exactly 8 AA peptide
@@ -931,7 +932,7 @@ class TestPeptideVariantGraph(unittest.TestCase):
             check_variants=True
         )
 
-        variant_peptides = [str(seq) for seq in peptides.keys()]
+        variant_peptides = [str(seq) for seq in peptides]
         # Should not include stop codon in any peptide
         for pep in variant_peptides:
             self.assertNotIn('*', pep)
@@ -966,7 +967,8 @@ class TestPeptideVariantGraph(unittest.TestCase):
         self.assertGreater(len(peptides_sw), 0)
 
         # Verify we get peptides with variant amino acids
-        variant_peps = [str(seq) for seq in peptides_sw.keys()]
+        variant_peps = [str(seq) for seq in peptides_sw]
         # Should have reasonable number of peptides (not thousands)
-        # Each starting position can generate ~4 windows (8-11mers), so expect hundreds not thousands
+        # Each starting position can generate ~4 windows (8-11mers), so expect
+        # hundreds not thousands
         self.assertLess(len(variant_peps), 1000)

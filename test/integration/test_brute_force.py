@@ -18,6 +18,8 @@ def create_base_args() -> argparse.Namespace:
     args.min_mw = '500.'
     args.min_length = 7
     args.max_length = 25
+    args.peptide_finding_mode = 'misc'
+    args.flanking_size = None
     args.variant_ids = []
     args.force = True
     return args

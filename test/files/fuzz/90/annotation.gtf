@@ -1,0 +1,11 @@
+chrF	.	gene	1	1570	.	-	.	 gene_id FAKEG00000140; transcript_id FAKET00000140; protein_id FAKEP00000140; tag cds_start_NF;
+chrF	.	transcript	1	1570	.	-	.	 gene_id FAKEG00000140; transcript_id FAKET00000140; protein_id FAKEP00000140; tag cds_start_NF; is_protein_coding true;
+chrF	.	selenocysteine	830	832	.	-	.	 gene_id FAKEG00000140; transcript_id FAKET00000140; protein_id FAKEP00000140; tag cds_start_NF;
+chrF	.	selenocysteine	812	814	.	-	.	 gene_id FAKEG00000140; transcript_id FAKET00000140; protein_id FAKEP00000140; tag cds_start_NF;
+chrF	.	exon	1	240	.	-	.	 gene_id FAKEG00000140; transcript_id FAKET00000140; protein_id FAKEP00000140; tag cds_start_NF;
+chrF	.	CDS	194	240	.	-	2	 gene_id FAKEG00000140; transcript_id FAKET00000140; protein_id FAKEP00000140; tag cds_start_NF;
+chrF	.	CDS	691	974	.	-	1	 gene_id FAKEG00000140; transcript_id FAKET00000140; protein_id FAKEP00000140; tag cds_start_NF;
+chrF	.	exon	691	974	.	-	.	 gene_id FAKEG00000140; transcript_id FAKET00000140; protein_id FAKEP00000140; tag cds_start_NF;
+chrF	.	CDS	1271	1570	.	-	1	 gene_id FAKEG00000140; transcript_id FAKET00000140; protein_id FAKEP00000140; tag cds_start_NF;
+chrF	.	exon	1271	1570	.	-	.	 gene_id FAKEG00000140; transcript_id FAKET00000140; protein_id FAKEP00000140; tag cds_start_NF;
+chrF	.	UTR	1	193	.	-	.	 gene_id FAKEG00000140; transcript_id FAKET00000140; protein_id FAKEP00000140; tag cds_start_NF;

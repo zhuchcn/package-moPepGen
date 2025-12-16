@@ -74,6 +74,8 @@ def create_args_generate_index(work_dir:Path, data_dir:Path) -> argparse.Namespa
     args.invalid_protein_as_noncoding = False
     args.cleavage_rule = 'trypsin'
     args.cleavage_exception = 'trypsin_exception'
+    args.peptide_finding_mode = 'misc'
+    args.flanking_size = 10
     args.min_mw = 500.
     args.min_length = 7
     args.max_length = 25
@@ -210,7 +212,9 @@ class TestCallVariantPeptides(TestCaseIntegration):
         args.annotation_gtf = self.data_dir/'annotation.gtf'
         args.proteome_fasta = self.data_dir/'translate.fasta'
         args.invalid_protein_as_noncoding = True
-        args.cleavage_rule = 'None'
+        args.cleavage_rule = 'trypsin'
+        args.cleavage_exception = 'trypsin_exception'
+        args.peptide_finding_mode = 'misc'
 
         args2 = create_args_generate_index(self.work_dir, self.data_dir)
         cli.generate_index(args2)
@@ -1503,4 +1507,50 @@ class TestCallVariantPeptides(TestCaseIntegration):
         self.default_test_case(gvf, reference, expected, {
             'cleavage_rule': 'None',
             'peptide_finding_mode': 'sliding-window'
+        })
+
+    def test_call_variant_peptide_sliding_window_fuzz90(self):
+        """ Test case from fuzz test that ensures variant peptides are called
+        correctly in sliding-window mode. """
+        fuzz_dir = self.data_dir/'fuzz/90'
+        gvf = [
+            fuzz_dir/'fake_variants.gvf'
+        ]
+        expected = fuzz_dir/'brute_force.txt'
+        reference = fuzz_dir
+        self.default_test_case(gvf, reference, expected, {
+            'peptide_finding_mode': 'sliding-window',
+            'min_length': 8,
+            'max_length': 11,
+            'cleavage_rule': 'None'
+        })
+
+    def test_call_variant_peptide_sliding_window_fuzz91(self):
+        """ Test case from fuzz test in sliding-window. """
+        fuzz_dir = self.data_dir/'fuzz/91'
+        gvf = [
+            fuzz_dir/'fake_variants.gvf'
+        ]
+        expected = fuzz_dir/'brute_force.txt'
+        reference = fuzz_dir
+        self.default_test_case(gvf, reference, expected, {
+            'peptide_finding_mode': 'sliding-window',
+            'min_length': 8,
+            'max_length': 11,
+            'cleavage_rule': 'None'
+        })
+
+    def test_call_variant_peptide_sliding_window_fuzz92(self):
+        """ Test case from fuzz test in sliding-window. """
+        fuzz_dir = self.data_dir/'fuzz/92'
+        gvf = [
+            fuzz_dir/'fake_variants.gvf'
+        ]
+        expected = fuzz_dir/'brute_force.txt'
+        reference = fuzz_dir
+        self.default_test_case(gvf, reference, expected, {
+            'peptide_finding_mode': 'sliding-window',
+            'min_length': 8,
+            'max_length': 11,
+            'cleavage_rule': 'None'
         })

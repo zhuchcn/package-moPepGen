@@ -20,8 +20,10 @@ class TestGenerateIndex(TestCaseIntegration):
         args.gtf_symlink = False
         args.reference_source = None
         args.invalid_protein_as_noncoding = False
+        args.peptide_finding_mode = 'misc'
         args.cleavage_rule = 'trypsin'
         args.cleavage_exception = 'trypsin_exception'
+        args.flanking_size = 10
         args.min_mw = 500.
         args.min_length = 7
         args.max_length = 25
@@ -38,12 +40,14 @@ class TestGenerateIndex(TestCaseIntegration):
         args.gtf_symlink = False
         args.reference_source = None
         args.invalid_protein_as_noncoding = False
+        args.peptide_finding_mode = 'misc'
         args.cleavage_rule = 'trypsin'
         args.cleavage_exception = 'trypsin_exception'
         args.min_mw = 500.
         args.min_length = 7
         args.max_length = 25
         args.miscleavage = 2
+        args.flanking_size = 10
         args.quiet = True
         args.force = False
         args.index_dir = self.work_dir / 'index'

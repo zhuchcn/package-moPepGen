@@ -48,9 +48,16 @@ class TestAminoAcidSeqDict(unittest.TestCase):
         seq.infer_ids()
         kwargs = {seq.transcript_id : seq}
         seqdict = aa.AminoAcidSeqDict(**kwargs)
-        pool = seqdict.create_unique_peptide_pool(anno=anno, rule='trypsin',
-            exception='trypsin_exception', miscleavage=2, min_mw=0.,
-            min_length = 7, max_length = 25)
+        pool = seqdict.create_unique_peptide_pool(
+            anno=anno,
+            mode='misc',
+            rule='trypsin',
+            exception='trypsin_exception',
+            miscleavage=2,
+            min_mw=0.,
+            min_length = 7,
+            max_length = 25
+        )
         expected = {'MKVTAEAISWNER', 'KVTAEAISWNER', 'VTAEAISWNER',
             'STSETNNSMVTEFIFLGLSDSQEK', 'LQRTFLFMLFFVFYGGIVFGN',
             'TFLFMLFFVFYGGIVFGN', 'MKVTAEALSWNER', 'KVTAEALSWNER',

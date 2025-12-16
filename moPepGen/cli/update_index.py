@@ -35,6 +35,13 @@ def add_subparser_update_index(subparsers:argparse._SubParsersAction):
         action='store_true',
         help='Force write data to index dir.'
     )
+    p.add_argument(
+        '--peptide-finding-mode',
+        type=str,
+        choices=[mode.value for mode in params.constant.PeptideFindingMode],
+        default='misc',
+        help='The mode to find peptides for canonical peptide pool generation.'
+    )
     common.add_args_cleavage(p)
     common.add_args_debug_level(p)
     p.set_defaults(func=update_index)
@@ -50,6 +57,7 @@ def update_index(args:argparse.Namespace):
     index_dir = IndexDir(args.index_dir)
     index_dir.validate_metadata()
 
+    mode:str = args.peptide_finding_mode
     rule:str = args.cleavage_rule
     miscleavage:int = int(args.miscleavage)
     min_mw:float = float(args.min_mw)
@@ -57,11 +65,12 @@ def update_index(args:argparse.Namespace):
     max_length:int = int(args.max_length)
     exception = args.cleavage_exception
 
-    cleavage_params = params.CleavageParams(
+    cp = params.CleavageParams(
         enzyme=rule, exception=exception, miscleavage=miscleavage,
-        min_mw=min_mw, min_length = min_length, max_length = max_length
+        min_mw=min_mw, min_length = min_length, max_length = max_length,
+        peptide_finding_mode=mode, flanking_size=args.flanking_size
     )
-    pool_exists = index_dir.metadata.get_canonical_pool(cleavage_params) is not None
+    pool_exists = index_dir.metadata.get_canonical_pool(cp) is not None
     if pool_exists and not args.force:
         logger.error(
             'Canonical peptide pool already exists with the given parameters.'
@@ -79,11 +88,17 @@ def update_index(args:argparse.Namespace):
         logger.info('No cleavage rule specified. Skip generating canonical peptides.')
     else:
         canonical_peptides = proteome.create_unique_peptide_pool(
-            anno=anno, rule=rule, exception=exception, miscleavage=miscleavage,
-            min_mw=min_mw, min_length = min_length, max_length = max_length
+            anno=anno,
+            mode=cp.peptide_finding_mode,
+            rule=cp.enzyme,
+            exception=cp.exception,
+            miscleavage=cp.miscleavage,
+            min_mw=cp.min_mw,
+            min_length=cp.min_length,
+            max_length = cp.max_length
         )
         logger.info('Canoincal peptide pool generated.')
-        index_dir.save_canonical_peptides(canonical_peptides, cleavage_params, override=args.force)
+        index_dir.save_canonical_peptides(canonical_peptides, cp, override=args.force)
         logger.info('Canoincal peptide pool saved.')
 
     if not pool_exists:
