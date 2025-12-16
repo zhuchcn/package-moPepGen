@@ -1111,33 +1111,28 @@ class PVGPeptideFinder():
             if cur_len > max_length:
                 continue
 
-            # If we have at least min_length AA, emit all windows from min to max length
-            if cur_len >= min_length:
-                for window_len in range(min_length, min(max_length, cur_len) + 1):
-                    # Take last window_len nodes
-                    window_nodes = cur_path.nodes[-window_len:]
+            # Check if window contains any variants
+            has_variant = any(
+                any(not v.is_silent for v in n.variants)
+                for n in cur_path.nodes
+            )
 
-                    # Check if window contains any variants
-                    has_variant = any(
-                        any(not v.is_silent for v in n.variants)
-                        for n in window_nodes
-                    )
+            if backsplicing_only:
+                subgraph_ids = set().union(*[n.get_subgraph_id_set() for n in cur_path.nodes])
+                flag_backsplicing = len(subgraph_ids) > 1
+            else:
+                flag_backsplicing = True
 
-                    if not has_variant:
-                        continue
+            if has_variant and flag_backsplicing:
+                # Create window path and add to results
+                window_path = PVGNodePath(
+                    nodes=list(cur_path.nodes),
+                    additional_variants=set()
+                )
+                paths.data.append(window_path)
 
-                    # Check backsplicing requirement for circRNA
-                    if backsplicing_only:
-                        subgraph_ids = set().union(*[n.get_subgraph_id_set() for n in window_nodes])
-                        if len(subgraph_ids) <= 1:
-                            continue
-
-                    # Create window path and add to results
-                    window_path = PVGNodePath(
-                        nodes=list(window_nodes),
-                        additional_variants=set()
-                    )
-                    paths.data.append(window_path)
+            if cur_len >= max_length:
+                continue
 
             # Extend by one more node
             cur_node = cur_path.nodes[-1]
@@ -1156,12 +1151,10 @@ class PVGPeptideFinder():
 
                 # Extend path
                 new_path = copy.copy(cur_path)
-                if cur_len == max_length:
-                    # Slide window: remove first node, add new node
-                    new_path.nodes = new_path.nodes[1:]
                 new_path.append(out_node)
 
                 # Get additional variants
+                # FIXME: we should not consider downstream stop altering variants here
                 additional_variants = out_node.get_downstream_stop_altering_variants()
                 new_path.add_additional_variants(additional_variants)
 

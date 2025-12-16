@@ -1520,3 +1520,18 @@ class TestCallVariantPeptides(TestCaseIntegration):
             'max_length': 11,
             'cleavage_rule': 'None'
         })
+
+    def test_call_variant_peptide_sliding_window_fuzz91(self):
+        """ Test case from fuzz test in sliding-window. """
+        fuzz_dir = self.data_dir/'fuzz/91'
+        gvf = [
+            fuzz_dir/'fake_variants.gvf'
+        ]
+        expected = fuzz_dir/'brute_force.txt'
+        reference = fuzz_dir
+        self.default_test_case(gvf, reference, expected, {
+            'peptide_finding_mode': 'sliding-window',
+            'min_length': 8,
+            'max_length': 11,
+            'cleavage_rule': 'None'
+        })
