@@ -10,6 +10,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### [1.5.1-rc2] - 2025-12-16
+
+- Add `--peptide-finding-mode` to `fuzzTest` for testing all three peptide finding strategies.
+
+- Major refactoring of `bruteForce` module: split monolithic script into modular structure with separate classes for peptide candidate generation, sequence building, effect analysis, and compatibility validation.
+
+- Improved `sliding-window` peptide finding algorithm in `callVariant` with better start gain variant handling.
+
+- Fixed parameter passing in `fuzzTest`, `updateIndex`, and `generateIndex` to properly support `--peptide-finding-mode` and `--flanking-size`.
+
+- Renamed `PeptideSiteGenerator` to `PeptideCandidateGenerator` in brute force module with enhanced windowing logic for misc, archipel, and sliding-window modes.
+
 ### [1.5.1-rc1] - 2025-12-02
 
 - Add `--peptide-finding-mode` option to `callVariant` with support for `misc`, `archipel`, and `sliding-window` modes for variant peptide discovery.
