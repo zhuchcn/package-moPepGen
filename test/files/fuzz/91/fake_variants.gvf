@@ -1,0 +1,14 @@
+##fileformat=VCFv4.2
+##mopepgen_version=1.5.1-rc1
+##parser=parseVEP
+##reference_index=
+##genome_fasta=
+##annotation_gtf=
+##source=
+##CHROM=<Description="Gene ID">
+##INFO=<ID=TRANSCRIPT_ID,Number=1,Type=String,Description="Transcript ID">
+##INFO=<ID=GENE_SYMBOL,Number=1,Type=String,Description="Gene Symbol">
+##INFO=<ID=GENOMIC_POSITION,Number=1,Type=String,Description="Genomic Position">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+FAKEG00000904	1310	FAKEG00000904-1309-T-G	T	G	.	.	TRANSCRIPT_ID=FAKET00000904;GENOMIC_POSITION=chrF-38:39;GENE_SYMBOL=
+FAKEG00000904	1021	FAKEG00000904-1020-C-G	C	G	.	.	TRANSCRIPT_ID=FAKET00000904;GENOMIC_POSITION=chrF-327:328;GENE_SYMBOL=

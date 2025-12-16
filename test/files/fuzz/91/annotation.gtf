@@ -1,0 +1,6 @@
+chrF	.	gene	1	1348	.	-	.	 gene_id FAKEG00000904; transcript_id FAKET00000904; protein_id FAKEP00000904;
+chrF	.	transcript	1	1348	.	-	.	 gene_id FAKEG00000904; transcript_id FAKET00000904; protein_id FAKEP00000904; is_protein_coding false;
+chrF	.	exon	1	176	.	-	.	 gene_id FAKEG00000904; transcript_id FAKET00000904; protein_id FAKEP00000904;
+chrF	.	exon	588	774	.	-	.	 gene_id FAKEG00000904; transcript_id FAKET00000904; protein_id FAKEP00000904;
+chrF	.	exon	875	1096	.	-	.	 gene_id FAKEG00000904; transcript_id FAKET00000904; protein_id FAKEP00000904;
+chrF	.	exon	1214	1348	.	-	.	 gene_id FAKEG00000904; transcript_id FAKET00000904; protein_id FAKEP00000904;
