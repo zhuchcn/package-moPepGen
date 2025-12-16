@@ -26,12 +26,14 @@ class TestGenerateIndex(TestCaseIntegration):
         args.gtf_symlink = False
         args.reference_source = None
         args.invalid_protein_as_noncoding = False
+        args.peptide_finding_mode = 'misc'
         args.cleavage_rule = 'trypsin'
         args.cleavage_exception = 'trypsin_exception'
         args.min_mw = 500.
         args.min_length = 7
         args.max_length = 25
         args.miscleavage = 2
+        args.flanking_size = 10
         args.quiet = True
         args.force = False
         args.output_dir = self.work_dir / 'index'
@@ -82,7 +84,9 @@ class TestGenerateIndex(TestCaseIntegration):
         cleavage_params = params.CleavageParams(
             enzyme=args.cleavage_rule, exception=args.cleavage_exception,
             miscleavage=args.miscleavage, min_mw=args.min_mw,
-            min_length=args.min_length, max_length=args.max_length
+            min_length=args.min_length, max_length=args.max_length,
+            peptide_finding_mode=args.peptide_finding_mode,
+            flanking_size=args.flanking_size
         )
         canonical_peptides = index_dir.load_canonical_peptides(cleavage_params)
         self.assertTrue(len(canonical_peptides) > 0)

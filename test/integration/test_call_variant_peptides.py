@@ -74,6 +74,8 @@ def create_args_generate_index(work_dir:Path, data_dir:Path) -> argparse.Namespa
     args.invalid_protein_as_noncoding = False
     args.cleavage_rule = 'trypsin'
     args.cleavage_exception = 'trypsin_exception'
+    args.peptide_finding_mode = 'misc'
+    args.flanking_size = 10
     args.min_mw = 500.
     args.min_length = 7
     args.max_length = 25
@@ -210,7 +212,9 @@ class TestCallVariantPeptides(TestCaseIntegration):
         args.annotation_gtf = self.data_dir/'annotation.gtf'
         args.proteome_fasta = self.data_dir/'translate.fasta'
         args.invalid_protein_as_noncoding = True
-        args.cleavage_rule = 'None'
+        args.cleavage_rule = 'trypsin'
+        args.cleavage_exception = 'trypsin_exception'
+        args.peptide_finding_mode = 'misc'
 
         args2 = create_args_generate_index(self.work_dir, self.data_dir)
         cli.generate_index(args2)

@@ -111,6 +111,7 @@ class CleavageParams():
     def jsonfy(self, graph_params:bool=False):
         """ jsonfy """
         data = {
+            'peptide_finding_mode': self.peptide_finding_mode,
             'enzyme': self.enzyme,
             'exception': self.exception,
             'miscleavage': self.miscleavage,

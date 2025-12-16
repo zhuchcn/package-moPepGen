@@ -675,7 +675,7 @@ class FuzzTestCase():
         args.selenocysteine_termination = True
         args.w2f_reassignment = True
         args.cleavage_rule = self.config.cleavage_rule
-        args.cleavage_exception = None
+        args.cleavage_exception = self.config.cleavage_exception
         args.peptide_finding_mode = self.config.peptide_finding_mode
         args.miscleavage = self.config.miscleavage
         args.min_mw = self.config.min_mw

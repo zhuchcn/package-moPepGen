@@ -98,7 +98,7 @@ class AminoAcidSeqDict(dict):
             A set of unique peptides as string.
         """
         pool = set()
-        if mode == 'archipel':
+        if mode == constant.PeptideFindingMode.ARCHIPEL.value:
             return pool # archipel mode does not use canonical peptides
         protein: AminoAcidSeqRecord
         it = iter(self.values())

@@ -179,10 +179,10 @@ def call_variant_peptide(args: argparse.Namespace) -> None:
         peptide_finding_mode= args.peptide_finding_mode
     )
 
-    if cleavage_params.peptide_finding_mode == constant.PeptideFindingMode.MISC.value:
-        load_canonical_peptides = True
-    else:
+    if cleavage_params.peptide_finding_mode == constant.PeptideFindingMode.ARCHIPEL.value:
         load_canonical_peptides = False
+    else:
+        load_canonical_peptides = True
 
     # Load references in the CLI layer
     reference_data = common.load_references(
