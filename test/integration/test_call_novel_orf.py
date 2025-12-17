@@ -200,7 +200,7 @@ class TestCallNovelORFPeptides(TestCaseIntegration):
         args = create_base_args()
         args.peptide_finding_mode = 'archipel'
         args.flanking_size = 10
-        args.clearing_rule = 'None'
+        args.cleavage_rule = 'None'
         args.genome_fasta = self.data_dir/'genome.fasta'
         args.annotation_gtf = self.data_dir/'annotation.gtf'
         args.proteome_fasta = self.data_dir/'translate.fasta'
