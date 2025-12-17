@@ -32,6 +32,8 @@ def create_base_args() -> argparse.Namespace:
     args.w2f_reassignment = False
     args.cleavage_rule = 'trypsin'
     args.cleavage_exception = 'trypsin_exception'
+    args.peptide_finding_mode = 'misc'
+    args.flanking_size = 10
     args.miscleavage = '2'
     args.min_mw = '500.'
     args.min_length = 7
@@ -169,3 +171,40 @@ class TestCallNovelORFPeptides(TestCaseIntegration):
             f"No coding transcripts found. Novel ORF txs: {novel_orf_txs}, "
             f"Proteome txs: {proteome_tx_ids}"
         )
+
+    def test_call_novel_orf_sliding_window(self):
+        """  Test calling for novel ORF peptides with sliding window """
+        args = create_base_args()
+        args.w2f_reassignment = True
+        args.genome_fasta = self.data_dir/'genome.fasta'
+        args.annotation_gtf = self.data_dir/'annotation.gtf'
+        args.proteome_fasta = self.data_dir/'translate.fasta'
+        args.output_path = self.work_dir/'noncoding_peptide.fasta'
+        args.output_orf = self.work_dir/'noncoding_orf.fasta'
+        args.coding_novel_orf = False
+        args.peptide_finding_mode = 'sliding-window'
+        args.cleavage_rule = 'none'
+        args.min_length = 8
+        args.max_length = 11
+        cli.call_novel_orf_peptide(args)
+        files = {str(file.name) for file in self.work_dir.glob('*')}
+        expected = {args.output_path.name, args.output_orf.name}
+        self.assertEqual(files, expected)
+        with open(args.output_path, 'rt') as handle:
+            peptides = list(SeqIO.parse(handle, 'fasta'))
+            self.assertGreater(len(peptides), 0)
+            self.assertTrue(all(8 <= len(p.seq) <= 11 for p in peptides))
+
+    def test_call_novel_orf_archipel_not_supported(self):
+        """ Test that archipel mode is not supported for novel ORF peptides """
+        args = create_base_args()
+        args.peptide_finding_mode = 'archipel'
+        args.flanking_size = 10
+        args.clearing_rule = 'None'
+        args.genome_fasta = self.data_dir/'genome.fasta'
+        args.annotation_gtf = self.data_dir/'annotation.gtf'
+        args.proteome_fasta = self.data_dir/'translate.fasta'
+        args.output_path = self.work_dir/'noncoding_peptide.fasta'
+        args.output_orf = self.work_dir/'noncoding_orf.fasta'
+        with self.assertRaises(ValueError):
+            cli.call_novel_orf_peptide(args)

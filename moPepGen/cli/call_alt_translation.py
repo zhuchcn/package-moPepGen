@@ -3,7 +3,7 @@ harbor any alternative translation event. """
 from __future__ import annotations
 import argparse
 from pathlib import Path
-from moPepGen import params, aa, get_logger
+from moPepGen import constant, params, aa, get_logger
 from moPepGen.cli import common
 from moPepGen.pipeline.call_alt_translation_worker import call_alt_translation_for_transcript
 
@@ -37,6 +37,16 @@ def add_subparser_call_alt_translation(subparsers:argparse._SubParsersAction):
         help='Include peptides of selenoprotiens that the UGA is treated as '
         'termination instead of Sec.'
     )
+    p.add_argument(
+        '--peptide-finding-mode',
+        type=str,
+        help='Peptide finding mode to use when calling peptides.',
+        choices=[
+            mode.value.replace('_', '-') for mode in constant.PeptideFindingMode
+            if mode is not constant.PeptideFindingMode.ARCHIPEL
+        ],
+        default=constant.PeptideFindingMode.MISC.value,
+    )
 
     common.add_args_reference(p)
     common.add_args_cleavage(p)
@@ -55,13 +65,26 @@ def call_alt_translation(args: argparse.Namespace) -> None:
         args.output_path, OUTPUT_FILE_FORMATS, check_writable=True
     )
 
+    # Archipel mode is not supported for alt translation peptide calling
+    supported_modes = [
+        mode.value.replace('_', '-') for mode in constant.PeptideFindingMode
+        if mode is not constant.PeptideFindingMode.ARCHIPEL
+    ]
+    if args.peptide_finding_mode not in supported_modes:
+        raise ValueError(
+            f"Peptide finding mode '{args.peptide_finding_mode}' is not supported "
+            "for novel ORF peptide calling."
+        )
+
     cp = params.CleavageParams(
         enzyme=args.cleavage_rule,
         exception=args.cleavage_exception,
         miscleavage=args.miscleavage,
         min_mw=args.min_mw,
         min_length=args.min_length,
-        max_length=args.max_length
+        max_length=args.max_length,
+        peptide_finding_mode=args.peptide_finding_mode,
+        flanking_size=args.flanking_size
     )
 
     if not (args.selenocysteine_termination or args.w2f_reassignment):

@@ -16,7 +16,7 @@ call variant peptides while excluding canonical sequences.
 """
 from __future__ import annotations
 from typing import Dict, List, Set, Tuple, TYPE_CHECKING
-from moPepGen import svgraph, get_logger, params
+from moPepGen import svgraph, get_logger, params, constant
 from moPepGen.SeqFeature import FeatureLocation, SeqFeature
 from .timeout import timeout
 from .models import TimeoutTracer, GraphPhase
@@ -161,10 +161,9 @@ def call_peptide_main(tx_id: str, tx_variants: List['seqvar.VariantRecord'],
 
     tracer.graph = GraphPhase.PVG
 
-    if cleavage_params.enzyme is not None:
+    if mode == constant.PeptideFindingMode.MISC.value:
         pgraph.create_cleavage_graph()
-        mode = 'misc'
-    elif mode == 'archipel':
+    elif mode == constant.PeptideFindingMode.ARCHIPEL.value:
         pgraph.create_islands_graph()
         pgraph.collapse_ref_nodes()
     else:

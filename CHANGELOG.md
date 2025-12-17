@@ -10,6 +10,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### [1.5.1-rc3] - 2025-12-17
+
+- Add `--peptide-finding-mode` to `callAltTranslation` and `callNovelORF`; support `misc` and `sliding-window`, and explicitly disallow `archipel` for these commands.
+
+- Update `params.CleavageParams` with mode-aware defaults and consistency checks (warn on enzyme/mode mismatch); include `flanking_size` and `peptide_finding_mode` in JSON output.
+
+- Normalize CLI choices and defaults for `--peptide-finding-mode` across commands using `constant.PeptideFindingMode`.
+
+- Adjust sliding-window candidate handling in `PVGPeptideFinder` to align with other mode. We don't check for variants at this stage.
+
 ### [1.5.1-rc2] - 2025-12-16
 
 - Add `--peptide-finding-mode` to `fuzzTest` for testing all three peptide finding strategies.
