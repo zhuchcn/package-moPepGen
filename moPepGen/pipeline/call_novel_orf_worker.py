@@ -53,6 +53,11 @@ def call_novel_orf_for_transcript(
     Raises:
         ReferenceSeqnameNotFoundError: If chromosome not found in genome
     """
+    mode = cleavage_params.peptide_finding_mode
+    if mode == constant.PeptideFindingMode.ARCHIPEL.value:
+        raise ValueError(
+            "Peptide finding mode 'archipel' is not supported for novel ORF peptide calling."
+        )
     chrom = tx_model.transcript.location.seqname
     try:
         contig_seq = genome[chrom]
@@ -80,12 +85,8 @@ def call_novel_orf_for_transcript(
         start_codons=codon_table.start_codons
     )
 
-    mode = cleavage_params.peptide_finding_mode
     if mode == constant.PeptideFindingMode.MISC.value:
         pgraph.create_cleavage_graph()
-    elif mode == constant.PeptideFindingMode.ARCHIPEL.value:
-        pgraph.create_islands_graph()
-        pgraph.collapse_ref_nodes()
     else:
         pgraph.create_atomic_graph()
 

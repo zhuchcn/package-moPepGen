@@ -47,6 +47,12 @@ def call_alt_translation_for_transcript(
     Returns:
         Set of alternative translation peptide records
     """
+    mode = cleavage_params.peptide_finding_mode
+    if mode == constant.PeptideFindingMode.ARCHIPEL.value:
+        raise ValueError(
+            "Peptide finding mode 'archipel' is not supported for alternative "
+            "translation peptide calling."
+        )
     chrom = tx_model.transcript.chrom
     tx_seq = tx_model.get_transcript_sequence(genome[chrom])
 
@@ -73,12 +79,8 @@ def call_alt_translation_for_transcript(
     )
 
     # Create cleavage graph and call peptides
-    mode = cleavage_params.peptide_finding_mode
     if mode == constant.PeptideFindingMode.MISC.value:
         pgraph.create_cleavage_graph()
-    elif mode == constant.PeptideFindingMode.ARCHIPEL.value:
-        pgraph.create_islands_graph()
-        pgraph.collapse_ref_nodes()
     else:
         pgraph.create_atomic_graph()
 
