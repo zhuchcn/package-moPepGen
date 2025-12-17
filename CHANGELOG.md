@@ -18,7 +18,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - Normalize CLI choices and defaults for `--peptide-finding-mode` across commands using `constant.PeptideFindingMode`.
 
-- Adjust sliding-window candidate handling in `PVGPeptideFinder` to align with other mode. We don't check for variants at this stage.
+- Adjust sliding-window candidate handling in `PVGPeptideFinder` to align with other modes. We don't check for variants at this stage.
 
 ### [1.5.1-rc2] - 2025-12-16
 
