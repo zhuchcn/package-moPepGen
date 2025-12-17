@@ -60,8 +60,9 @@ class CleavageParams():
         elif self.enzyme is not None \
                 and peptide_finding_mode != constant.PeptideFindingMode.MISC.value:
             logger.warning(
-                f"Cleavage enzyme is specified as '{self.enzyme}', but peptide finding "
-                f"mode is '{peptide_finding_mode}'. Setting peptide finding mode to 'misc'."
+                "Cleavage enzyme is specified as '%s', but peptide finding "
+                "mode is '%s'. Setting peptide finding mode to 'misc'.",
+                self.enzyme, peptide_finding_mode
             )
             peptide_finding_mode = constant.PeptideFindingMode.MISC.value
 
@@ -75,8 +76,8 @@ class CleavageParams():
         )
         if min_mw is None:
             logger.info(
-                f"Using default min_mw = {default_params.min_mw} "
-                f"for peptide finding mode '{peptide_finding_mode}'."
+                "Using default min_mw = %i for peptide finding mode '%s'.",
+                default_params.min_mw, peptide_finding_mode
             )
             min_mw = default_params.min_mw
         else:
@@ -84,8 +85,8 @@ class CleavageParams():
 
         if min_length is None:
             logger.info(
-                f"Using default min_length = {default_params.min_length} "
-                f"for peptide finding mode '{peptide_finding_mode}'."
+                "Using default min_length = %i for peptide finding mode '%s'.",
+                default_params.min_length, peptide_finding_mode
             )
             min_length = default_params.min_length
         else:
@@ -93,8 +94,8 @@ class CleavageParams():
 
         if max_length is None:
             logger.info(
-                f"Using default max_length = {default_params.max_length} "
-                f"for peptide finding mode '{peptide_finding_mode}'."
+                "Using default max_length = %i for peptide finding mode '%s'.",
+                default_params.max_length, peptide_finding_mode
             )
             max_length = default_params.max_length
         else:
