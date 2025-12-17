@@ -1114,11 +1114,11 @@ class PVGPeptideFinder():
 
             if cur_len >= min_length:
                 # Check if window contains any variants
-                has_variant = any(
-                    any(not v.is_silent for v in n.variants)
-                    for n in cur_path.nodes
-                )
-                has_variant |= any(len(o.start_gain) > 0 for o in orfs)
+                # has_variant = any(
+                #     any(not v.is_silent for v in n.variants)
+                #     for n in cur_path.nodes
+                # )
+                # has_variant |= any(len(o.start_gain) > 0 for o in orfs)
 
                 if backsplicing_only:
                     subgraph_ids = set().union(*[n.get_subgraph_id_set() for n in cur_path.nodes])
@@ -1126,7 +1126,7 @@ class PVGPeptideFinder():
                 else:
                     flag_backsplicing = True
 
-                if has_variant and flag_backsplicing:
+                if flag_backsplicing:
                     # Create window path and add to results
                     window_path = PVGNodePath(
                         nodes=list(cur_path.nodes),

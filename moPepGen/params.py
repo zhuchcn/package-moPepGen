@@ -2,7 +2,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 import dataclasses
-from moPepGen import aa, constant
+from moPepGen import aa, constant, get_logger
 
 
 if TYPE_CHECKING:
@@ -44,14 +44,28 @@ class CleavageParams():
             min_mw:int=None, min_length:int=None, max_length:int=None,
             max_variants_per_node:int=7, additional_variants_per_misc:int=2,
             in_bubble_cap_step_down:int=0, min_nodes_to_collapse:int=30,
-            naa_to_collapse:int=5, flanking_size:int=9, peptide_finding_mode:str='misc'):
+            naa_to_collapse:int=5, flanking_size:int=10, peptide_finding_mode:str='misc'):
         """ constructor """
         self.enzyme = enzyme
         if self.enzyme and self.enzyme.lower() == 'none':
             self.enzyme = None
         peptide_finding_mode = peptide_finding_mode.lower().replace('-', '_')
+        logger = get_logger()
         if self.enzyme is None and peptide_finding_mode == constant.PeptideFindingMode.MISC.value:
+            logger.warning(
+                "Cleavage enzyme is not specified, but peptide finding mode is 'misc'. "
+                "Setting peptide finding mode to 'sliding_window'."
+            )
             peptide_finding_mode = constant.PeptideFindingMode.SLIDING_WINDOW.value
+        elif self.enzyme is not None \
+                and peptide_finding_mode != constant.PeptideFindingMode.MISC.value:
+            logger.warning(
+                "Cleavage enzyme is specified as '%s', but peptide finding "
+                "mode is '%s'. Setting peptide finding mode to 'misc'.",
+                self.enzyme, peptide_finding_mode
+            )
+            peptide_finding_mode = constant.PeptideFindingMode.MISC.value
+
         self.peptide_finding_mode = peptide_finding_mode
         self.exception = exception
         self.miscleavage = int(miscleavage)
@@ -61,17 +75,32 @@ class CleavageParams():
             flanking_size=flanking_size
         )
         if min_mw is None:
+            logger.info(
+                "Using default min_mw = %i for peptide finding mode '%s'.",
+                default_params.min_mw, peptide_finding_mode
+            )
             min_mw = default_params.min_mw
         else:
             min_mw = float(min_mw)
+
         if min_length is None:
+            logger.info(
+                "Using default min_length = %i for peptide finding mode '%s'.",
+                default_params.min_length, peptide_finding_mode
+            )
             min_length = default_params.min_length
         else:
             min_length = int(min_length)
+
         if max_length is None:
+            logger.info(
+                "Using default max_length = %i for peptide finding mode '%s'.",
+                default_params.max_length, peptide_finding_mode
+            )
             max_length = default_params.max_length
         else:
             max_length = int(max_length)
+
         self.min_mw = min_mw
         self.min_length = min_length
         self.max_length = max_length

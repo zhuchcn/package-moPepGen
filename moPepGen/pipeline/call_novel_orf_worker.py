@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Set, List, Tuple, Dict, IO
 from Bio.Seq import Seq
 from Bio.SeqIO import FastaIO
 
-from moPepGen import svgraph, aa, VARIANT_PEPTIDE_SOURCE_DELIMITER
+from moPepGen import svgraph, aa, constant, VARIANT_PEPTIDE_SOURCE_DELIMITER
 from moPepGen.err import ReferenceSeqnameNotFoundError
 
 if TYPE_CHECKING:
@@ -53,6 +53,11 @@ def call_novel_orf_for_transcript(
     Raises:
         ReferenceSeqnameNotFoundError: If chromosome not found in genome
     """
+    mode = cleavage_params.peptide_finding_mode
+    if mode == constant.PeptideFindingMode.ARCHIPEL.value:
+        raise ValueError(
+            "Peptide finding mode 'archipel' is not supported for novel ORF peptide calling."
+        )
     chrom = tx_model.transcript.location.seqname
     try:
         contig_seq = genome[chrom]
@@ -80,10 +85,14 @@ def call_novel_orf_for_transcript(
         start_codons=codon_table.start_codons
     )
 
-    # Create cleavage graph and call peptides with ORF checking
-    pgraph.create_cleavage_graph()
+    if mode == constant.PeptideFindingMode.MISC.value:
+        pgraph.create_cleavage_graph()
+    else:
+        pgraph.create_atomic_graph()
+
     peptide_anno = pgraph.call_variant_peptides(
         check_variants=False,
+        mode=mode,
         check_orf=True,
         denylist=canonical_peptides,
         orf_assignment=orf_assignment,

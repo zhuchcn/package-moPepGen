@@ -3,7 +3,7 @@ It finds all start codons of any novel ORF gene. """
 from __future__ import annotations
 import argparse
 from pathlib import Path
-from moPepGen import params, aa, get_logger
+from moPepGen import params, aa, get_logger, constant
 from moPepGen.err import ReferenceSeqnameNotFoundError
 from moPepGen.cli import common
 from moPepGen.pipeline.call_novel_orf_worker import (
@@ -80,6 +80,16 @@ def add_subparser_call_novel_orf(subparsers:argparse._SubParsersAction):
         metavar='<file>',
         default=None
     )
+    p.add_argument(
+        '--peptide-finding-mode',
+        type=str,
+        choices=[
+            mode.value.replace('_', '-') for mode in constant.PeptideFindingMode
+            if mode is not constant.PeptideFindingMode.ARCHIPEL
+        ],
+        default=constant.PeptideFindingMode.MISC.value,
+        help='The mode to find peptides for novel ORF peptide calling.'
+    )
 
     common.add_args_reference(p)
     common.add_args_cleavage(p)
@@ -101,13 +111,26 @@ def call_novel_orf_peptide(args: argparse.Namespace) -> None:
             args.output_orf, OUTPUT_FILE_FORMATS, check_writable=True
         )
 
+    # Archipel mode is not supported for novel ORF peptide calling
+    supported_modes = [
+        mode.value.replace('_', '-') for mode in constant.PeptideFindingMode
+        if mode is not constant.PeptideFindingMode.ARCHIPEL
+    ]
+    if args.peptide_finding_mode not in supported_modes:
+        raise ValueError(
+            f"Peptide finding mode '{args.peptide_finding_mode}' is not supported "
+            "for novel ORF peptide calling."
+        )
+
     cleavage_params = params.CleavageParams(
         enzyme=args.cleavage_rule,
         exception=args.cleavage_exception,
         miscleavage=args.miscleavage,
         min_mw=args.min_mw,
         min_length=args.min_length,
-        max_length=args.max_length
+        max_length=args.max_length,
+        peptide_finding_mode=args.peptide_finding_mode,
+        flanking_size=args.flanking_size
     )
 
     common.print_start_message(args)

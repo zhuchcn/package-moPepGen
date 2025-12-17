@@ -27,6 +27,8 @@ def create_base_args() -> argparse.Namespace:
     args.selenocysteine_termination = True
     args.cleavage_rule = 'trypsin'
     args.cleavage_exception = 'trypsin_exception'
+    args.peptide_finding_mode = 'misc'
+    args.flanking_size = 10
     args.miscleavage = 2
     args.min_mw = 500.
     args.min_length = 7
@@ -77,3 +79,35 @@ class TestCallAltTranslation(TestCaseIntegration):
             self.assertTrue(all(isinstance(x, vpi.BaseVariantPeptideIdentifier)
                 for x in var_labels))
             self.assertTrue(all(len(x.variant_ids) > 0 for x in var_labels))
+
+    def test_call_alt_translation_sliding_window(self):
+        """ test call alt translation peptides with sliding-window mode """
+        args = create_base_args()
+        args.genome_fasta = self.data_dir/'genome.fasta'
+        args.annotation_gtf = self.data_dir/'annotation.gtf'
+        args.proteome_fasta = self.data_dir/'translate.fasta'
+        args.output_path = self.work_dir/'alt_translation_sw.fasta'
+        args.peptide_finding_mode = 'sliding-window'
+        args.cleavage_rule = 'None'  # not used in sliding-window mode
+        args.min_length = 8
+        args.max_length = 11
+
+        cli.call_alt_translation(args)
+        with open(args.output_path, 'rt') as handle:
+            peptides = list(SeqIO.parse(handle, 'fasta'))
+            self.assertGreater(len(peptides), 0)
+            self.assertTrue(all(8 <= len(p.seq) <=11 for p in peptides))
+
+    def test_call_alt_translation_archipel_mode_error(self):
+        """ test call alt translation peptides with archipel mode error """
+        args = create_base_args()
+        args.genome_fasta = self.data_dir/'genome.fasta'
+        args.annotation_gtf = self.data_dir/'annotation.gtf'
+        args.proteome_fasta = self.data_dir/'translate.fasta'
+        args.output_path = self.work_dir/'alt_translation_archipel.fasta'
+        args.peptide_finding_mode = 'archipel'
+        args.cleavage_rule = 'None'
+        args.flanking_size = 10
+
+        with self.assertRaises(ValueError):
+            cli.call_alt_translation(args)

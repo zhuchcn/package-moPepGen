@@ -136,8 +136,8 @@ def add_subparser_call_variant(subparsers: argparse._SubParsersAction):
     p.add_argument(
         '--peptide-finding-mode',
         type=str,
-        choices=['misc', 'archipel', 'sliding-window'],
-        default='misc',
+        choices=[mode.value.replace('_', '-') for mode in constant.PeptideFindingMode],
+        default=constant.PeptideFindingMode.MISC.value,
         help='Peptide finding strategy: misc (enzyme-based miscleavage), '
             'archipel (variant islands with flanking regions), or '
             'sliding-window (enumerate all 8-11mer variant-containing peptides).'

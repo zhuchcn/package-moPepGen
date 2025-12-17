@@ -8,7 +8,7 @@ transcripts, decoupled from CLI concerns.
 from __future__ import annotations
 from typing import TYPE_CHECKING, Dict, Set
 
-from moPepGen import svgraph, aa, VARIANT_PEPTIDE_SOURCE_DELIMITER
+from moPepGen import svgraph, aa, constant, VARIANT_PEPTIDE_SOURCE_DELIMITER
 
 if TYPE_CHECKING:
     from Bio.Seq import Seq
@@ -47,6 +47,12 @@ def call_alt_translation_for_transcript(
     Returns:
         Set of alternative translation peptide records
     """
+    mode = cleavage_params.peptide_finding_mode
+    if mode == constant.PeptideFindingMode.ARCHIPEL.value:
+        raise ValueError(
+            "Peptide finding mode 'archipel' is not supported for alternative "
+            "translation peptide calling."
+        )
     chrom = tx_model.transcript.chrom
     tx_seq = tx_model.get_transcript_sequence(genome[chrom])
 
@@ -73,9 +79,14 @@ def call_alt_translation_for_transcript(
     )
 
     # Create cleavage graph and call peptides
-    pgraph.create_cleavage_graph()
+    if mode == constant.PeptideFindingMode.MISC.value:
+        pgraph.create_cleavage_graph()
+    else:
+        pgraph.create_atomic_graph()
+
     peptide_anno = pgraph.call_variant_peptides(
         check_variants=True,
+        mode=mode,
         truncate_sec=sec_truncation,
         w2f=w2f_reassignment,
         check_external_variants=False
