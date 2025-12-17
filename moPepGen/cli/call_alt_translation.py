@@ -73,7 +73,7 @@ def call_alt_translation(args: argparse.Namespace) -> None:
     if args.peptide_finding_mode not in supported_modes:
         raise ValueError(
             f"Peptide finding mode '{args.peptide_finding_mode}' is not supported "
-            "for novel ORF peptide calling."
+            "for alt translation peptide calling."
         )
 
     cp = params.CleavageParams(
