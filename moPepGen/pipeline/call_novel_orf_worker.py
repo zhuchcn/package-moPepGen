@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from moPepGen.gtf import TranscriptAnnotationModel
     from moPepGen.dna import DNASeqDict, DNASeqRecordWithCoordinates
     from moPepGen.params import CodonTableInfo, CleavageParams
+    from moPepGen.aa import AnnotatedPeptideLabel
 
 
 def call_novel_orf_for_transcript(
@@ -29,7 +30,7 @@ def call_novel_orf_for_transcript(
     cleavage_params: CleavageParams,
     orf_assignment: str,
     w2f_reassignment: bool
-) -> Tuple[Set[aa.AminoAcidSeqRecord], List[aa.AminoAcidSeqRecord]]:
+) -> Tuple[Dict[Seq, List[AnnotatedPeptideLabel]], List[aa.AminoAcidSeqRecord]]:
     """
     Call novel ORF peptides for a single transcript.
 
@@ -48,7 +49,7 @@ def call_novel_orf_for_transcript(
         w2f_reassignment: Include W>F (Trp to Phe) reassignment peptides
 
     Returns:
-        Tuple of (peptide records, ORF sequences)
+        Tuple of (peptide_anno dict with annotations, ORF sequences)
 
     Raises:
         ReferenceSeqnameNotFoundError: If chromosome not found in genome
@@ -100,27 +101,6 @@ def call_novel_orf_for_transcript(
         check_external_variants=False
     )
 
-    # Aggregate labels for peptides
-    peptide_map: Dict[Seq, Set[str]] = {}
-    for seq, annotated_labels in peptide_anno.items():
-        for label in annotated_labels:
-            if seq in peptide_map:
-                peptide_map[seq].add(label.label)
-            else:
-                peptide_map[seq] = {label.label}
-
-    # Create AminoAcidSeqRecord objects
-    peptides = set()
-    for seq, labels in peptide_map.items():
-        label = VARIANT_PEPTIDE_SOURCE_DELIMITER.join(labels)
-        peptides.add(
-            aa.AminoAcidSeqRecord(
-                seq=seq,
-                description=label,
-                name=label
-            )
-        )
-
     # Extract ORF sequences
     orfs = get_orf_sequences(
         pgraph=pgraph,
@@ -132,7 +112,7 @@ def call_novel_orf_for_transcript(
         start_codons=codon_table.start_codons
     )
 
-    return peptides, orfs
+    return peptide_anno, orfs
 
 
 def get_orf_sequences(

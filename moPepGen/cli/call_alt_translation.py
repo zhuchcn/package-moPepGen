@@ -2,10 +2,17 @@
 harbor any alternative translation event. """
 from __future__ import annotations
 import argparse
+import os
 from pathlib import Path
-from moPepGen import constant, params, aa, get_logger
+from contextlib import ExitStack
+from moPepGen import constant, params, aa, get_logger, svgraph
 from moPepGen.cli import common
 from moPepGen.pipeline.call_alt_translation_worker import call_alt_translation_for_transcript
+from moPepGen.svgraph.VariantPeptideTable import (
+    VariantPeptideTable,
+    get_peptide_table_path,
+    get_peptide_table_path_temp
+)
 
 OUTPUT_FILE_FORMATS = ['.fa', '.fasta']
 
@@ -101,38 +108,57 @@ def call_alt_translation(args: argparse.Namespace) -> None:
         load_codon_tables=True
     )
 
-    peptide_pool = aa.VariantPeptidePool()
+    peptide_table_temp_path = get_peptide_table_path_temp(args.output_path)
+    peptide_table_output_path = get_peptide_table_path(args.output_path)
 
-    # Process each coding transcript
-    for tx_id in ref_data.anno.transcripts:
-        tx_model = ref_data.anno.transcripts[tx_id]
-        if not tx_model.is_protein_coding:
-            continue
+    with ExitStack() as stack:
+        # Open temporary file for peptide table
+        seq_anno_handle = stack.enter_context(open(peptide_table_temp_path, 'w+'))
+        peptide_table = VariantPeptideTable(seq_anno_handle)
+        peptide_table.write_header()
 
-        codon_table = ref_data.codon_tables[tx_model.transcript.chrom]
+        # Process each coding transcript
+        for tx_id in ref_data.anno.transcripts:
+            tx_model = ref_data.anno.transcripts[tx_id]
+            if not tx_model.is_protein_coding:
+                continue
 
-        try:
-            peptides = call_alt_translation_for_transcript(
-                tx_id=tx_id,
-                tx_model=tx_model,
-                genome=ref_data.genome,
-                anno=ref_data.anno,
-                codon_table=codon_table,
-                cleavage_params=cp,
-                w2f_reassignment=args.w2f_reassignment,
-                sec_truncation=args.selenocysteine_termination
-            )
-        except:
-            logger.error('Exception raised from %s', tx_id)
-            raise
+            codon_table = ref_data.codon_tables[tx_model.transcript.chrom]
 
-        for peptide in peptides:
-            peptide_pool.add_peptide(
-                peptide=peptide,
-                canonical_peptides=ref_data.canonical_peptides,
-                cleavage_params=cp
-            )
+            try:
+                peptide_anno = call_alt_translation_for_transcript(
+                    tx_id=tx_id,
+                    tx_model=tx_model,
+                    genome=ref_data.genome,
+                    anno=ref_data.anno,
+                    codon_table=codon_table,
+                    cleavage_params=cp,
+                    w2f_reassignment=args.w2f_reassignment,
+                    sec_truncation=args.selenocysteine_termination
+                )
+            except:
+                logger.error('Exception raised from %s', tx_id)
+                raise
 
-    peptide_pool.write(args.output_path)
+            # Write peptides to table immediately
+            for peptide in peptide_anno:
+                is_valid = peptide_table.is_valid(
+                    seq=peptide,
+                    canonical_peptides=ref_data.canonical_peptides,
+                    cleavage_params=cp
+                )
+                if is_valid:
+                    for seq_anno in peptide_anno[peptide]:
+                        peptide_table.add_peptide(peptide, seq_anno)
+
+        # Write FASTA from table
+        logger.info('Writing peptides to FASTA...')
+        peptide_table.write_fasta(args.output_path)
+        logger.info('Alternative translation peptide FASTA written.')
+        peptide_table.sort_table(peptide_table_output_path)
+        logger.info('Alternative translation peptide table sorted.')
+
+    os.remove(peptide_table_temp_path)
 
     logger.info('Alternative translation peptide FASTA file written to disk.')
+

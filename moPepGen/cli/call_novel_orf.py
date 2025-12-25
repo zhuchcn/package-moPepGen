@@ -2,13 +2,21 @@
 It finds all start codons of any novel ORF gene. """
 from __future__ import annotations
 import argparse
+import os
 from pathlib import Path
-from moPepGen import params, aa, get_logger, constant
+from contextlib import ExitStack
+from typing import List
+from moPepGen import params, aa, get_logger, constant, svgraph
 from moPepGen.err import ReferenceSeqnameNotFoundError
 from moPepGen.cli import common
 from moPepGen.pipeline.call_novel_orf_worker import (
     call_novel_orf_for_transcript,
     write_orf_fasta
+)
+from moPepGen.svgraph.VariantPeptideTable import (
+    VariantPeptideTable,
+    get_peptide_table_path,
+    get_peptide_table_path_temp
 )
 
 OUTPUT_FILE_FORMATS = ['.fa', '.fasta']
@@ -143,68 +151,88 @@ def call_novel_orf_peptide(args: argparse.Namespace) -> None:
 
     inclusion_biotypes, exclusion_biotypes = common.load_inclusion_exclusion_biotypes(args)
 
-    novel_orf_peptide_pool = aa.VariantPeptidePool()
-    orf_pool = []
+    peptide_table_temp_path = get_peptide_table_path_temp(args.output_path)
+    peptide_table_output_path = get_peptide_table_path(args.output_path)
 
-    i = 0
-    for tx_id in ref_data.anno.transcripts:
-        tx_model = ref_data.anno.transcripts[tx_id]
-        codon_table = ref_data.codon_tables[tx_model.transcript.chrom]
+    with ExitStack() as stack:
+        # Open temporary file for peptide table
+        seq_anno_handle = stack.enter_context(open(peptide_table_temp_path, 'w+'))
+        peptide_table = VariantPeptideTable(seq_anno_handle)
+        peptide_table.write_header()
 
-        # Filter transcripts
-        if tx_model.is_protein_coding:
-            if not args.coding_novel_orf:
-                continue
-        else:
-            if inclusion_biotypes and \
-                    tx_model.transcript.biotype not in inclusion_biotypes:
-                continue
-            if exclusion_biotypes and \
-                    tx_model.transcript.biotype in exclusion_biotypes:
-                continue
-            if tx_id in ref_data.proteome:
-                continue
-            if tx_model.transcript_len() < args.min_tx_length:
-                continue
+        orf_pool = []
+        i = 0
+        for tx_id in ref_data.anno.transcripts:
+            tx_model = ref_data.anno.transcripts[tx_id]
+            codon_table = ref_data.codon_tables[tx_model.transcript.chrom]
 
-        try:
-            peptides, orfs = call_novel_orf_for_transcript(
-                tx_id=tx_id,
-                tx_model=tx_model,
-                genome=ref_data.genome,
-                canonical_peptides=ref_data.canonical_peptides,
-                codon_table=codon_table,
-                cleavage_params=cleavage_params,
-                orf_assignment=args.orf_assignment,
-                w2f_reassignment=args.w2f_reassignment
-            )
+            # Filter transcripts
+            if tx_model.is_protein_coding:
+                if not args.coding_novel_orf:
+                    continue
+            else:
+                if inclusion_biotypes and \
+                        tx_model.transcript.biotype not in inclusion_biotypes:
+                    continue
+                if exclusion_biotypes and \
+                        tx_model.transcript.biotype in exclusion_biotypes:
+                    continue
+                if tx_id in ref_data.proteome:
+                    continue
+                if tx_model.transcript_len() < args.min_tx_length:
+                    continue
 
-            if not orfs:
-                continue
-
-            orf_pool.extend(orfs)
-
-            for peptide in peptides:
-                novel_orf_peptide_pool.add_peptide(
-                    peptide=peptide,
+            try:
+                peptide_anno, orfs = call_novel_orf_for_transcript(
+                    tx_id=tx_id,
+                    tx_model=tx_model,
+                    genome=ref_data.genome,
                     canonical_peptides=ref_data.canonical_peptides,
-                    cleavage_params=cleavage_params
+                    codon_table=codon_table,
+                    cleavage_params=cleavage_params,
+                    orf_assignment=args.orf_assignment,
+                    w2f_reassignment=args.w2f_reassignment
                 )
-        except ReferenceSeqnameNotFoundError as e:
-            if not ReferenceSeqnameNotFoundError.raised:
-                logger.warning('%s: Make sure your GTF and FASTA files match.', e.args[0])
-                ReferenceSeqnameNotFoundError.mute()
-        except:
-            logger.error('Exception raised from %s', tx_id)
-            raise
 
-        i += 1
-        if i % 5000 == 0:
-            logger.info('%i transcripts processed.', i)
+                if not orfs:
+                    continue
 
-    novel_orf_peptide_pool.write(args.output_path)
+                orf_pool.extend(orfs)
+
+                # Write peptides to table immediately
+                for peptide in peptide_anno:
+                    is_valid = peptide_table.is_valid(
+                        seq=peptide,
+                        canonical_peptides=ref_data.canonical_peptides,
+                        cleavage_params=cleavage_params
+                    )
+                    if is_valid:
+                        for seq_anno in peptide_anno[peptide]:
+                            peptide_table.add_peptide(peptide, seq_anno)
+            except ReferenceSeqnameNotFoundError as e:
+                if not ReferenceSeqnameNotFoundError.raised:
+                    logger.warning('%s: Make sure your GTF and FASTA files match.', e.args[0])
+                    ReferenceSeqnameNotFoundError.mute()
+            except:
+                logger.error('Exception raised from %s', tx_id)
+                raise
+
+            i += 1
+            if i % 5000 == 0:
+                logger.info('%i transcripts processed.', i)
+
+        # Write FASTA from table
+        logger.info('Writing peptides to FASTA...')
+        peptide_table.write_fasta(args.output_path)
+        logger.info('Variant peptide FASTA written.')
+        peptide_table.sort_table(peptide_table_output_path)
+        logger.info('Variant peptide table sorted.')
+
+    os.remove(peptide_table_temp_path)
+
     if args.output_orf:
         with open(args.output_orf, 'w') as handle:
             write_orf_fasta(orf_pool, handle)
 
     logger.info('Noncanonical peptide FASTA file written to disk.')
+

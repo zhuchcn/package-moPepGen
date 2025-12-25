@@ -71,7 +71,11 @@ class TestCallNovelORFPeptides(TestCaseIntegration):
         args.output_orf = self.work_dir/'noncoding_orf.fasta'
         cli.call_novel_orf_peptide(args)
         files = {str(file.name) for file in self.work_dir.glob('*')}
-        expected = {'noncoding_peptide.fasta', 'noncoding_orf.fasta'}
+        expected = {
+            args.output_path.name,
+            args.output_orf.name,
+            args.output_path.stem + '_peptide_table.txt'
+        }
         self.assertEqual(files, expected)
         with open(self.work_dir/'noncoding_peptide.fasta', 'rt') as handle:
             peptides = list(SeqIO.parse(handle, 'fasta'))
@@ -90,7 +94,11 @@ class TestCallNovelORFPeptides(TestCaseIntegration):
         args.output_orf = self.work_dir/'noncoding_orf.fasta'
         cli.call_novel_orf_peptide(args)
         files = {str(file.name) for file in self.work_dir.glob('*')}
-        expected = {'noncoding_peptide.fasta', 'noncoding_orf.fasta'}
+        expected = {
+            args.output_path.name,
+            args.output_orf.name,
+            args.output_path.stem + '_peptide_table.txt'
+        }
         self.assertEqual(files, expected)
         size = os.stat(self.work_dir/'noncoding_peptide.fasta').st_size
         self.assertEqual(size, 0)
@@ -108,7 +116,11 @@ class TestCallNovelORFPeptides(TestCaseIntegration):
         args.output_orf = self.work_dir/'noncoding_orf.fasta'
         cli.call_novel_orf_peptide(args)
         files = {str(file.name) for file in self.work_dir.glob('*')}
-        expected = {'noncoding_peptide.fasta', 'noncoding_orf.fasta'}
+        expected = {
+            args.output_path.name,
+            args.output_orf.name,
+            args.output_path.stem + '_peptide_table.txt'
+        }
         self.assertEqual(files, expected)
         with open(self.work_dir/'noncoding_peptide.fasta', 'rt') as handle:
             peptides = list(SeqIO.parse(handle, 'fasta'))
@@ -129,7 +141,11 @@ class TestCallNovelORFPeptides(TestCaseIntegration):
         args.coding_novel_orf = True
         cli.call_novel_orf_peptide(args)
         files = {str(file.name) for file in self.work_dir.glob('*')}
-        expected = {args.output_path.name, args.output_orf.name}
+        expected = {
+            args.output_path.name,
+            args.output_orf.name,
+            args.output_path.stem + '_peptide_table.txt'
+        }
         self.assertEqual(files, expected)
 
         anno = gtf.GenomicAnnotation()
@@ -188,7 +204,11 @@ class TestCallNovelORFPeptides(TestCaseIntegration):
         args.max_length = 11
         cli.call_novel_orf_peptide(args)
         files = {str(file.name) for file in self.work_dir.glob('*')}
-        expected = {args.output_path.name, args.output_orf.name}
+        expected = {
+            args.output_path.name,
+            args.output_orf.name,
+            args.output_path.stem + '_peptide_table.txt'
+        }
         self.assertEqual(files, expected)
         with open(args.output_path, 'rt') as handle:
             peptides = list(SeqIO.parse(handle, 'fasta'))
