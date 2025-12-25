@@ -5,7 +5,7 @@ import argparse
 import os
 from pathlib import Path
 from contextlib import ExitStack
-from moPepGen import constant, params, aa, get_logger
+from moPepGen import constant, params, get_logger
 from moPepGen.cli import common
 from moPepGen.pipeline.call_alt_translation_worker import call_alt_translation_for_transcript
 from moPepGen.svgraph.VariantPeptideTable import (
@@ -141,6 +141,7 @@ def call_alt_translation(args: argparse.Namespace) -> None:
                 raise
 
             # Write peptides to table immediately
+            # pylint: disable=C0206
             for peptide in peptide_anno:
                 is_valid = peptide_table.is_valid(
                     seq=peptide,
@@ -161,4 +162,3 @@ def call_alt_translation(args: argparse.Namespace) -> None:
     os.remove(peptide_table_temp_path)
 
     logger.info('Alternative translation peptide FASTA file written to disk.')
-

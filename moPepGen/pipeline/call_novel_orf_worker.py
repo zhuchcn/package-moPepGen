@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Set, List, Tuple, Dict, IO
 from Bio.Seq import Seq
 from Bio.SeqIO import FastaIO
 
-from moPepGen import svgraph, aa, constant, VARIANT_PEPTIDE_SOURCE_DELIMITER
+from moPepGen import svgraph, aa, constant
 from moPepGen.err import ReferenceSeqnameNotFoundError
 
 if TYPE_CHECKING:

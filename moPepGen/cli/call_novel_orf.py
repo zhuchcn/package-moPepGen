@@ -5,7 +5,7 @@ import argparse
 import os
 from pathlib import Path
 from contextlib import ExitStack
-from moPepGen import params, aa, get_logger, constant
+from moPepGen import params, get_logger, constant
 from moPepGen.err import ReferenceSeqnameNotFoundError
 from moPepGen.cli import common
 from moPepGen.pipeline.call_novel_orf_worker import (
@@ -199,6 +199,7 @@ def call_novel_orf_peptide(args: argparse.Namespace) -> None:
                 orf_pool.extend(orfs)
 
                 # Write peptides to table immediately
+                # pylint: disable=C0206
                 for peptide in peptide_anno:
                     is_valid = peptide_table.is_valid(
                         seq=peptide,
@@ -234,4 +235,3 @@ def call_novel_orf_peptide(args: argparse.Namespace) -> None:
             write_orf_fasta(orf_pool, handle)
 
     logger.info('Noncanonical peptide FASTA file written to disk.')
-
