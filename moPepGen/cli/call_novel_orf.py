@@ -5,7 +5,6 @@ import argparse
 import os
 from pathlib import Path
 from contextlib import ExitStack
-from typing import List
 from moPepGen import params, aa, get_logger, constant, svgraph
 from moPepGen.err import ReferenceSeqnameNotFoundError
 from moPepGen.cli import common
