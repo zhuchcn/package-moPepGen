@@ -5,7 +5,7 @@ import argparse
 import os
 from pathlib import Path
 from contextlib import ExitStack
-from moPepGen import constant, params, aa, get_logger, svgraph
+from moPepGen import constant, params, aa, get_logger
 from moPepGen.cli import common
 from moPepGen.pipeline.call_alt_translation_worker import call_alt_translation_for_transcript
 from moPepGen.svgraph.VariantPeptideTable import (
