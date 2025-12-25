@@ -6,15 +6,17 @@ translation events (W>F reassignment, selenocysteine termination) from coding
 transcripts, decoupled from CLI concerns.
 """
 from __future__ import annotations
-from typing import TYPE_CHECKING, Dict, Set
+from typing import TYPE_CHECKING
 
-from moPepGen import svgraph, aa, constant, VARIANT_PEPTIDE_SOURCE_DELIMITER
+from moPepGen import svgraph, constant
 
 if TYPE_CHECKING:
+    from typing import Dict, List
     from Bio.Seq import Seq
     from moPepGen.gtf import TranscriptAnnotationModel, GenomicAnnotation
     from moPepGen.dna import DNASeqDict
     from moPepGen.params import CodonTableInfo, CleavageParams
+    from moPepGen.aa import AnnotatedPeptideLabel
 
 
 def call_alt_translation_for_transcript(
@@ -26,7 +28,7 @@ def call_alt_translation_for_transcript(
     cleavage_params: CleavageParams,
     w2f_reassignment: bool,
     sec_truncation: bool
-) -> Set[aa.AminoAcidSeqRecord]:
+) -> Dict[Seq, List[AnnotatedPeptideLabel]]:
     """
     Call alternative translation peptides for a single transcript.
 
@@ -45,7 +47,7 @@ def call_alt_translation_for_transcript(
         sec_truncation: Include selenocysteine termination peptides
 
     Returns:
-        Set of alternative translation peptide records
+        Dict of peptide_anno with full annotation (Seq -> List[AnnotatedPeptideLabel])
     """
     mode = cleavage_params.peptide_finding_mode
     if mode == constant.PeptideFindingMode.ARCHIPEL.value:
@@ -92,25 +94,4 @@ def call_alt_translation_for_transcript(
         check_external_variants=False
     )
 
-    # Aggregate labels for peptides
-    peptide_map: Dict[Seq, Set[str]] = {}
-    for seq, annotated_labels in peptide_anno.items():
-        for label in annotated_labels:
-            if seq in peptide_map:
-                peptide_map[seq].add(label.label)
-            else:
-                peptide_map[seq] = {label.label}
-
-    # Create AminoAcidSeqRecord objects
-    peptides = set()
-    for seq, labels in peptide_map.items():
-        label = VARIANT_PEPTIDE_SOURCE_DELIMITER.join(labels)
-        peptides.add(
-            aa.AminoAcidSeqRecord(
-                seq=seq,
-                description=label,
-                name=label
-            )
-        )
-
-    return peptides
+    return peptide_anno

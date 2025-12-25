@@ -10,6 +10,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### [1.5.1-rc4] - 2025-12-25
+
+- Refactor `callNovelORF` and `callAltTranslation` to use `VariantPeptideTable` for memory-efficient streaming and deduplication; peptides are written directly to a temporary table and only unique sequences are indexed in memory.
+
 ### [1.5.1-rc3] - 2025-12-17
 
 - Add `--peptide-finding-mode` to `callAltTranslation` and `callNovelORF`; support `misc` and `sliding-window`, and explicitly disallow `archipel` for these commands.
