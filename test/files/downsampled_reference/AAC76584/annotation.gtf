@@ -1,0 +1,4 @@
+chr1	.	gene	1	912	.	-	.	 gene_id b3560; gene_name glyQ; gene_biotype protein_coding;
+chr1	.	transcript	1	912	.	-	.	 gene_id b3560; transcript_id AAC76584; gene_name glyQ; gene_biotype protein_coding; tag Ensembl_canonical;
+chr1	.	exon	1	912	.	-	.	 gene_id b3560; transcript_id AAC76584; gene_name glyQ; gene_biotype protein_coding; tag Ensembl_canonical;
+chr1	.	CDS	4	912	.	-	0	 gene_id b3560; transcript_id AAC76584; gene_name glyQ; gene_biotype protein_coding; protein_id AAC76584; tag Ensembl_canonical;
