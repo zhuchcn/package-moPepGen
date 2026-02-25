@@ -401,3 +401,45 @@ class TestCasePVGCandidateNodePaths(unittest.TestCase):
         )
         c_flank, _ = paths.get_c_flank(nodes[2], 1, set())
         self.assertEqual(c_flank, 'Y')
+
+    def test_clip_initiator_m_sets_empty_n_flank(self):
+        """Clipped initiator M should not appear in N-flank context."""
+        tx_id = 'ENST0001'
+        data = {
+            1: ('M', [0], [None], [((0,1),(0,1))], 0),
+            2: ('A', [1], [None], [((0,1),(1,2))], 0),
+            3: ('K', [2], [None], [((0,1),(2,3))], 0),
+            4: ('*', [3], [None], [((0,1),(3,4))], 0)
+        }
+        graph, nodes = create_pgraph(data, tx_id)
+        cp = params.CleavageParams(enzyme='trypsin', min_length=1, min_mw=0)
+        paths = PVGCandidateNodePaths(
+            data=[],
+            cleavage_params=cp,
+            tx_id=tx_id,
+            gene_id='ENSG0001',
+            leading_node=nodes[1],
+            subgraphs=graph.subgraphs,
+            context_length=2,
+            n_flank_cache={},
+            c_flank_cache={}
+        )
+
+        outputs = list(paths.translational_modification(
+            seq=Seq('MAK'),
+            metadata=PVGPeptideMetadata(),
+            denylist=set(),
+            variants=set(),
+            is_start_codon=True,
+            selenocysteines=[],
+            check_variants=False,
+            check_external_variants=True,
+            pool=set(),
+            nodes=[nodes[1], nodes[2], nodes[3]],
+            clip_nterm_m=True,
+            bg_variants=set()
+        ))
+
+        clipped = [meta for seq, meta in outputs if str(seq) == 'AK']
+        self.assertEqual(len(clipped), 1)
+        self.assertEqual(clipped[0].n_flank, '')

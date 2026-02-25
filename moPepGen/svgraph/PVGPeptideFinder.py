@@ -928,7 +928,9 @@ class PVGCandidateNodePaths():
                             end_offset=len(nodes[-1].seq.seq),
                             bg_variants=bg_variants
                         )
-                        cur_metadata.n_flank = n_flank
+                        # Initiator Met clipping yields the N-terminus peptide.
+                        # The clipped Met is not reported as N-flank context.
+                        cur_metadata.n_flank = ''
                         cur_metadata.c_flank = c_flank
                     yield cur_seq, cur_metadata
 
@@ -1002,7 +1004,8 @@ class PVGCandidateNodePaths():
                                 bg_variants=bg_variants,
                                 end_node=cut_node
                             )
-                            cur_metadata_2.n_flank = n_flank
+                            # Same rule as above for N-terminal initiator Met clipping.
+                            cur_metadata_2.n_flank = ''
                             cur_metadata_2.c_flank = c_flank
                         yield cur_seq, cur_metadata_2
 
