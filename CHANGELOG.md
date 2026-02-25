@@ -10,6 +10,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### [1.5.1-rc5] - 2026-02-25
+
+- Add optional variant peptide flanking context output in `callVariant` via `--output-flanking` and `--context-length`; write per-peptide N/C context to `<output>_flanking_table.txt`.
+
+- Add deterministic boundary-level N/C flank discovery from PVG traversal with caching to avoid repeated graph walks across reused start/end boundaries.
+
+
 ### [1.5.1-rc4] - 2025-12-25
 
 - Refactor `callNovelORF` and `callAltTranslation` to use `VariantPeptideTable` for memory-efficient streaming and deduplication; peptides are written directly to a temporary table and only unique sequences are indexed in memory.

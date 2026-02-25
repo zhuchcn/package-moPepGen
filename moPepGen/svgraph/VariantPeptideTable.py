@@ -49,10 +49,42 @@ def get_peptide_table_path_temp(path: 'Path') -> 'Path':
     return path.parent / f"{path.stem}_peptide_table.tmp"
 
 
+def get_flanking_table_path(path: 'Path') -> 'Path':
+    """Get peptide-level flanking table path from output FASTA path."""
+    return path.parent / f"{path.stem}_flanking_table.txt"
+
+
 VARIANT_PEPTIDE_TABLE_HEADERS = [
     'sequence', 'header', 'subsequence', 'start', 'end', 'feature_type', 'feature_id',
     'ref_start', 'ref_end', 'start_offset', 'end_offset', 'variant'
 ]
+
+VARIANT_FLANKING_TABLE_HEADERS = [
+    'sequence', 'header', 'n_flank', 'c_flank'
+]
+
+
+class VariantPeptideFlankingTable:
+    """Peptide-level flanking context table writer.
+
+    Keeps one row per sequence+header pair.
+    """
+    def __init__(self, handle:IO[str]):
+        self.handle = handle
+        self._seen = set()
+
+    def write_header(self):
+        """Write table header."""
+        self.handle.write('#' + '\t'.join(VARIANT_FLANKING_TABLE_HEADERS) + '\n')
+
+    def add_peptide(self, sequence:str, header:str, n_flank:str, c_flank:str):
+        """Write a peptide-level flanking row once."""
+        key = (sequence, header)
+        if key in self._seen:
+            return
+        self._seen.add(key)
+        fields = [sequence, header, n_flank, c_flank]
+        self.handle.write('\t'.join(fields) + '\n')
 
 class VariantPeptideTable:
     """ Variant Peptide Segment Annotation """

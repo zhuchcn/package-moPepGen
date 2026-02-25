@@ -56,6 +56,8 @@ def create_base_args() -> argparse.Namespace:
     args.timeout_seconds = 1800
     args.skip_failed = False
     args.peptide_finding_mode = 'misc'
+    args.output_flanking = False
+    args.context_length = 10
     return args
 
 def create_args_generate_index(work_dir:Path, data_dir:Path) -> argparse.Namespace:
@@ -87,6 +89,35 @@ def create_args_generate_index(work_dir:Path, data_dir:Path) -> argparse.Namespa
 
 class TestCallVariantPeptides(TestCaseIntegration):
     """ Test cases for moPepGen callPeptides """
+
+    def assert_flanking_table_consistent(self, output_fasta:Path, context_length:int):
+        """Assert flanking table keys match peptide table and flank sizes are valid."""
+        peptide_table_path = output_fasta.parent / f"{output_fasta.stem}_peptide_table.txt"
+        flanking_table_path = output_fasta.parent / f"{output_fasta.stem}_flanking_table.txt"
+
+        peptide_keys = set()
+        with open(peptide_table_path, 'rt') as handle:
+            for line in handle:
+                if line.startswith('#'):
+                    continue
+                fields = line.rstrip('\n').split('\t')
+                peptide_keys.add((fields[0], fields[1]))
+
+        flanking_keys = set()
+        with open(flanking_table_path, 'rt') as handle:
+            header = handle.readline().rstrip('\n')
+            self.assertEqual(header, '#sequence\theader\tn_flank\tc_flank')
+            for line in handle:
+                fields = line.rstrip('\n').split('\t')
+                self.assertEqual(len(fields), 4)
+                sequence, header, n_flank, c_flank = fields
+                flanking_keys.add((sequence, header))
+                self.assertLessEqual(len(n_flank), context_length)
+                self.assertLessEqual(len(c_flank), context_length)
+                self.assertNotIn('*', n_flank)
+                self.assertNotIn('*', c_flank)
+
+        self.assertEqual(flanking_keys, peptide_keys)
 
     def assert_no_canonical_peptide_with_circ(self, seqs):
         """ Assert that no canonical peptide with circRNA """
@@ -176,6 +207,27 @@ class TestCallVariantPeptides(TestCaseIntegration):
         files = {str(file.name) for file in self.work_dir.glob('*')}
         expected = {'vep_moPepGen.fasta', 'vep_moPepGen_peptide_table.txt'}
         self.assertEqual(files, expected)
+
+    def test_call_variant_peptide_output_flanking_misc(self):
+        """Test that callVariant writes flanking table in misc mode."""
+        args = create_base_args()
+        args.input_path = [self.data_dir/'vep/vep_gSNP.gvf']
+        args.output_path = self.work_dir/'vep_moPepGen.fasta'
+        args.genome_fasta = self.data_dir/'genome.fasta'
+        args.annotation_gtf = self.data_dir/'annotation.gtf'
+        args.proteome_fasta = self.data_dir/'translate.fasta'
+        args.output_flanking = True
+        args.context_length = 7
+        cli.call_variant_peptide(args)
+
+        files = {str(file.name) for file in self.work_dir.glob('*')}
+        expected = {
+            'vep_moPepGen.fasta',
+            'vep_moPepGen_peptide_table.txt',
+            'vep_moPepGen_flanking_table.txt'
+        }
+        self.assertEqual(files, expected)
+        self.assert_flanking_table_consistent(args.output_path, args.context_length)
 
     def test_call_variant_peptide_archipel(self):
         """ Enzyme None """
@@ -1508,6 +1560,32 @@ class TestCallVariantPeptides(TestCaseIntegration):
             'cleavage_rule': 'None',
             'peptide_finding_mode': 'sliding-window'
         })
+
+    def test_call_variant_peptide_output_flanking_sliding_window(self):
+        """Test that callVariant writes flanking table in sliding-window mode."""
+        test_dir = self.data_dir/'lyl/case_1'
+        args = create_base_args()
+        args.input_path = [test_dir/'muttable.gvf']
+        args.output_path = self.work_dir/'sliding.fasta'
+        args.genome_fasta = test_dir/'genome.fasta'
+        args.annotation_gtf = test_dir/'annotation.gtf'
+        args.proteome_fasta = test_dir/'proteome.fasta'
+        args.cleavage_rule = 'None'
+        args.peptide_finding_mode = 'sliding-window'
+        args.min_length = 8
+        args.max_length = 11
+        args.output_flanking = True
+        args.context_length = 5
+        cli.call_variant_peptide(args)
+
+        files = {str(file.name) for file in self.work_dir.glob('*')}
+        expected = {
+            'sliding.fasta',
+            'sliding_peptide_table.txt',
+            'sliding_flanking_table.txt'
+        }
+        self.assertEqual(files, expected)
+        self.assert_flanking_table_consistent(args.output_path, args.context_length)
 
     def test_call_variant_peptide_sliding_window_fuzz90(self):
         """ Test case from fuzz test that ensures variant peptides are called

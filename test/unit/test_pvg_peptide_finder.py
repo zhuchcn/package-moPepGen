@@ -322,3 +322,82 @@ class TestCasePVGCandidateNodePaths(unittest.TestCase):
         cleavage_params = params.CleavageParams(enzyme='trypsin')
         misc_nodes = PVGCandidateNodePaths([], cleavage_params)
         self.assertFalse(misc_nodes.is_valid_seq('AAAAXAAA', set(), set()))
+
+    def test_get_n_flank_uses_leading_node_when_start_node_is_copy(self):
+        """N flank should still be found when start node copy has no in_nodes."""
+        tx_id = 'ENST0001'
+        data = {
+            1: ('M', [0], [None], [((0,1),(0,1))], 0),
+            2: ('A', [1], [None], [((0,1),(1,2))], 0),
+            3: ('B', [2], [None], [((0,1),(2,3))], 0),
+            4: ('X', [3], [None], [((0,1),(3,4))], 0),
+            5: ('*', [4], [None], [((0,1),(4,5))], 0)
+        }
+        graph, nodes = create_pgraph(data, tx_id)
+        cp = params.CleavageParams(enzyme='trypsin')
+        paths = PVGCandidateNodePaths(
+            data=[],
+            cleavage_params=cp,
+            tx_id=tx_id,
+            leading_node=nodes[4],
+            subgraphs=graph.subgraphs,
+            context_length=2,
+            n_flank_cache={},
+            c_flank_cache={}
+        )
+
+        start_copy = nodes[4].copy(in_nodes=False, id=True)
+        n_flank, _ = paths.get_n_flank(start_copy, 0, set())
+        self.assertEqual(n_flank, 'AB')
+
+    def test_get_n_flank_does_not_go_beyond_orf_start(self):
+        """N flank should stop at ORF start boundary."""
+        tx_id = 'ENST0001'
+        data = {
+            1: ('M', [0], [None], [((0,1),(0,1))], 0),
+            2: ('A', [1], [None], [((0,1),(1,2))], 0),
+            3: ('B', [2], [None], [((0,1),(2,3))], 0),
+            4: ('X', [3], [None], [((0,1),(3,4))], 0),
+            5: ('*', [4], [None], [((0,1),(4,5))], 0)
+        }
+        graph, nodes = create_pgraph(data, tx_id)
+        cp = params.CleavageParams(enzyme='trypsin')
+        paths = PVGCandidateNodePaths(
+            data=[],
+            cleavage_params=cp,
+            tx_id=tx_id,
+            leading_node=nodes[4],
+            subgraphs=graph.subgraphs,
+            context_length=3,
+            n_flank_cache={},
+            c_flank_cache={}
+        )
+        # ORF starts at node 2 (A). Upstream node 1 (M) must not be included.
+        paths.current_valid_orf = PVGOrf(orf=[0, 9], start_node=nodes[2], node_offset=0)
+        start_copy = nodes[4].copy(in_nodes=False, id=True)
+        n_flank, _ = paths.get_n_flank(start_copy, 0, set())
+        self.assertEqual(n_flank, 'AB')
+
+    def test_get_c_flank_stops_at_stop_codon(self):
+        """C flank should not include residues beyond stop codon."""
+        tx_id = 'ENST0001'
+        data = {
+            1: ('M', [0], [None], [((0,1),(0,1))], 0),
+            2: ('X', [1], [None], [((0,1),(1,2))], 0),
+            3: ('Y', [2], [None], [((0,1),(2,3))], 0),
+            4: ('*', [3], [None], [((0,1),(3,4))], 0)
+        }
+        graph, nodes = create_pgraph(data, tx_id)
+        cp = params.CleavageParams(enzyme='trypsin')
+        paths = PVGCandidateNodePaths(
+            data=[],
+            cleavage_params=cp,
+            tx_id=tx_id,
+            leading_node=nodes[2],
+            subgraphs=graph.subgraphs,
+            context_length=2,
+            n_flank_cache={},
+            c_flank_cache={}
+        )
+        c_flank, _ = paths.get_c_flank(nodes[2], 1, set())
+        self.assertEqual(c_flank, 'Y')

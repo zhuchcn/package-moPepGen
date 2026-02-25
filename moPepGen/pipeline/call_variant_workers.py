@@ -99,7 +99,7 @@ def call_peptide_main(tx_id: str, tx_variants: List['seqvar.VariantRecord'],
         cleavage_params: params.CleavageParams,
         max_adjacent_as_mnv: int, truncate_sec: bool, w2f: bool,
         denylist: Set[str], save_graph: bool, coding_novel_orf: bool,
-        tracer: TimeoutTracer, mode: str = 'misc'
+        tracer: TimeoutTracer, mode: str = 'misc', context_length: int = 0
         ) -> TypeCallPeptideReturnData:
     """Call variant peptides from transcriptional variants (main workflow).
 
@@ -176,7 +176,8 @@ def call_peptide_main(tx_id: str, tx_variants: List['seqvar.VariantRecord'],
             truncate_sec=truncate_sec,
             w2f=w2f,
             check_external_variants=True,
-            check_orf=False
+            check_orf=False,
+            context_length=context_length
         )
     else:
         peptide_map = {}
@@ -188,7 +189,8 @@ def call_peptide_main(tx_id: str, tx_variants: List['seqvar.VariantRecord'],
             truncate_sec=truncate_sec,
             w2f=w2f,
             check_external_variants=True,
-            check_orf=True
+            check_orf=True,
+            context_length=context_length
         )
         for peptide, labels in peptide_novel_orf.items():
             if peptide not in peptide_map:
@@ -206,7 +208,8 @@ def call_peptide_fusion(variant: 'seqvar.VariantRecord',
         gene_seqs: Dict[str, 'dna.DNASeqRecordWithCoordinates'],
         cleavage_params: params.CleavageParams, max_adjacent_as_mnv: int,
         w2f_reassignment: bool, denylist: Set[str], save_graph: bool,
-        coding_novel_orf: bool, tracer: TimeoutTracer, mode: str = 'misc'
+        coding_novel_orf: bool, tracer: TimeoutTracer, mode: str = 'misc',
+        context_length: int = 0
         ) -> TypeCallPeptideReturnData:
     """Call variant peptides from gene fusion events.
 
@@ -300,7 +303,8 @@ def call_peptide_fusion(variant: 'seqvar.VariantRecord',
         peptide_map = pgraph.call_variant_peptides(
             mode=peptide_mode,
             check_external_variants=True,
-            check_orf=False
+            check_orf=False,
+            context_length=context_length
         )
     else:
         peptide_map = {}
@@ -311,7 +315,8 @@ def call_peptide_fusion(variant: 'seqvar.VariantRecord',
             denylist=denylist,
             w2f=w2f_reassignment,
             check_external_variants=True,
-            check_orf=True
+            check_orf=True,
+            context_length=context_length
         )
         for peptide, labels in peptide_novel_orf.items():
             if peptide not in peptide_map:
@@ -328,7 +333,8 @@ def call_peptide_circ_rna(record: 'circ.CircRNAModel',
         codon_table: 'CodonTableInfo',
         cleavage_params: params.CleavageParams, max_adjacent_as_mnv: int,
         backsplicing_only: bool, w2f_reassignment: bool, denylist: Set[str],
-        save_graph: bool, tracer: TimeoutTracer, mode: str = 'misc'
+        save_graph: bool, tracer: TimeoutTracer, mode: str = 'misc',
+        context_length: int = 0
         ) -> TypeCallPeptideReturnData:
     """Call variant peptides from circular RNA.
 
@@ -422,7 +428,8 @@ def call_peptide_circ_rna(record: 'circ.CircRNAModel',
         circ_rna=record,
         backsplicing_only=backsplicing_only,
         w2f=w2f_reassignment,
-        check_external_variants=True
+        check_external_variants=True,
+        context_length=context_length
     )
     if not save_graph:
         cgraph, pgraph = None, None
@@ -449,6 +456,7 @@ def call_variant_peptides_wrapper(tx_id: str,
         skip_failed: bool,
         tracer: TimeoutTracer,
         mode: str = 'misc',
+        context_length: int = 0,
         **kwargs
         ) -> Tuple[
             Dict['Seq', List['AnnotatedPeptideLabel']],
@@ -560,7 +568,8 @@ def call_variant_peptides_wrapper(tx_id: str,
                     save_graph=save_graph,
                     coding_novel_orf=coding_novel_orf,
                     tracer=tracer,
-                    mode=mode
+                    mode=mode,
+                    context_length=context_length
                 )
                 main_peptides = set(peptide_map.keys())
                 dgraphs = (dgraph, dgraphs[1], dgraphs[2])
@@ -601,7 +610,8 @@ def call_variant_peptides_wrapper(tx_id: str,
                 codon_table=codon_table, tx_seqs=tx_seqs, gene_seqs=gene_seqs,
                 cleavage_params=cleavage_params, max_adjacent_as_mnv=max_adjacent_as_mnv,
                 w2f_reassignment=w2f_reassignment, denylist=denylist, save_graph=save_graph,
-                coding_novel_orf=coding_novel_orf, tracer=tracer, mode=mode
+                coding_novel_orf=coding_novel_orf, tracer=tracer, mode=mode,
+                context_length=context_length
             )
             dgraphs[1][variant.id] = dgraph
             pgraphs[1][variant.id] = pgraph
@@ -634,7 +644,7 @@ def call_variant_peptides_wrapper(tx_id: str,
                     max_adjacent_as_mnv=max_adjacent_as_mnv,
                     w2f_reassignment=w2f_reassignment, denylist=denylist,
                     save_graph=save_graph, backsplicing_only=backsplicing_only,
-                    tracer=tracer, mode=mode
+                    tracer=tracer, mode=mode, context_length=context_length
                 )
 
             except Exception as e:
