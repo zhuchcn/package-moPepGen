@@ -31,7 +31,8 @@ from moPepGen import svgraph, seqvar, gtf, params, get_logger
 from moPepGen.svgraph import ThreeFrameTVG
 from moPepGen.svgraph.VariantPeptideTable import (
     get_peptide_table_path,
-    get_peptide_table_path_temp
+    get_peptide_table_path_temp,
+    get_flanking_table_path
 )
 
 from .models import CallVariantDispatch, CallResult, Flags, Limits, TimeoutTracer, GraphPhase
@@ -159,6 +160,7 @@ def _process_with_stepdown(dispatch: CallVariantDispatch):
         'skip_failed': dispatch.flags.skip_failed,
         'timeout': dispatch.timeout_seconds,
         'mode': dispatch.mode,
+        'context_length': dispatch.flags.context_length if dispatch.flags.output_flanking else 0,
     }
     tracer = TimeoutTracer()
     base_kwargs['tracer'] = tracer
@@ -233,6 +235,7 @@ class CallVariantOrchestrator:
 
         self.peptide_table_temp_path = get_peptide_table_path_temp(self.output_path)
         self.peptide_table_output_path = get_peptide_table_path(self.output_path)
+        self.flanking_table_output_path = get_flanking_table_path(self.output_path)
 
         self.cleavage_params = cleavage_params
 
@@ -243,6 +246,8 @@ class CallVariantOrchestrator:
             skip_failed=args.skip_failed,
             truncate_sec=args.selenocysteine_termination,
             w2f_reassignment=args.w2f_reassignment,
+            output_flanking=getattr(args, 'output_flanking', False),
+            context_length=getattr(args, 'context_length', 10),
         )
         self.limits = Limits(
             max_adjacent_as_mnv=args.max_adjacent_as_mnv,
@@ -400,6 +405,12 @@ class CallVariantOrchestrator:
                 seqvar.VariantRecordPoolOnDiskOpener(self.variant_record_pool)
             )
             seq_anno_handle = stack.enter_context(open(self.peptide_table_temp_path, 'w+'))
+            if self.flags.output_flanking:
+                flank_handle = stack.enter_context(open(self.flanking_table_output_path, 'w'))
+                flank_table = svgraph.VariantPeptideFlankingTable(flank_handle)
+                flank_table.write_header()
+            else:
+                flank_table = None
 
             peptide_table = svgraph.VariantPeptideTable(seq_anno_handle)
             peptide_table.write_header()
@@ -425,7 +436,7 @@ class CallVariantOrchestrator:
                     dispatches.append(dispatch)
                 for result in process_pool.map(_process_with_stepdown, dispatches):
                     processed += 1
-                    self._handle_result(result, peptide_table, ref, graph_writer)
+                    self._handle_result(result, peptide_table, flank_table, ref, graph_writer)
                     if processed % 1000 == 0:
                         logger.info(
                             '%.2f %% ( %i / %i ) transcripts processed.',
@@ -439,7 +450,7 @@ class CallVariantOrchestrator:
                         continue
                     result = _process_with_stepdown(dispatch)
                     processed += 1
-                    self._handle_result(result, peptide_table, ref, graph_writer)
+                    self._handle_result(result, peptide_table, flank_table, ref, graph_writer)
                     if processed % 1000 == 0:
                         logger.info(
                             '%.2f %% ( %i / %i ) transcripts processed.',
@@ -455,6 +466,7 @@ class CallVariantOrchestrator:
         os.remove(self.peptide_table_temp_path)
 
     def _handle_result(self, result: CallResult, peptide_table: VariantPeptideTable,
+            flank_table: svgraph.VariantPeptideFlankingTable | None,
             ref: params.ReferenceData, graph_writer: GraphWriter | None):
         """Process results from a single transcript.
 
@@ -481,6 +493,13 @@ class CallVariantOrchestrator:
             if is_valid:
                 for seq_anno in result.peptide_anno[peptide]:
                     peptide_table.add_peptide(peptide, seq_anno)
+                    if flank_table is not None:
+                        flank_table.add_peptide(
+                            sequence=str(peptide),
+                            header=seq_anno.label,
+                            n_flank=seq_anno.n_flank,
+                            c_flank=seq_anno.c_flank
+                        )
         if graph_writer:
             graph_writer.write_dgraphs(result.tx_id, result.dgraphs)
             graph_writer.write_pgraphs(result.tx_id, result.pgraphs)

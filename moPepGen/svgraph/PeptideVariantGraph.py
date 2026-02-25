@@ -878,7 +878,7 @@ class PeptideVariantGraph():
             circ_rna:CircRNAModel=None, orf_assignment:str='max',
             backsplicing_only:bool=False, truncate_sec:bool=False, w2f:bool=False,
             check_external_variants:bool=True, find_ass:bool=False,
-            force_init_met:bool=True
+            force_init_met:bool=True, context_length:int=0
             ) -> Dict[Seq, List[AnnotatedPeptideLabel]]:
         """ Walk through the graph and find all noncanonical peptides.
 
@@ -924,7 +924,8 @@ class PeptideVariantGraph():
             w2f=w2f,
             check_external_variants=check_external_variants,
             cleavage_params=self.cleavage_params,
-            check_orf=check_orf
+            check_orf=check_orf,
+            context_length=context_length
         )
         traversal = PVGTraversal(
             check_variants=check_external_variants,

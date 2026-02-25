@@ -74,6 +74,8 @@ class Flags:
             When True, treats UGA as both Sec and a stop codon, generating both variants.
         w2f_reassignment: Whether to consider tryptophan (W) to phenylalanine (F)
             reassignment. Relevant for some mitochondrial and alternative genetic codes.
+        output_flanking: Whether to output peptide-level flanking context table.
+        context_length: Number of amino acids to collect for N/C context.
     """
     noncanonical_transcripts: bool
     backsplicing_only: bool
@@ -81,6 +83,8 @@ class Flags:
     skip_failed: bool
     truncate_sec: bool
     w2f_reassignment: bool
+    output_flanking: bool
+    context_length: int
 
 @dataclass
 class Limits:

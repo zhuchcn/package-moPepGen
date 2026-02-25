@@ -24,7 +24,8 @@ class PVGPeptideMetadata():
     """ Variant peptide metadata """
     def __init__(self, label:str=None, orf:Tuple[int,int]=None,
             is_pure_circ_rna:bool=False, has_variants:bool=False,
-            segments:List[PeptideSegment]=None, check_orf:bool=False):
+            segments:List[PeptideSegment]=None, check_orf:bool=False,
+            n_flank:str='', c_flank:str=''):
         """  """
         self.label = label
         self.orf = orf
@@ -32,6 +33,8 @@ class PVGPeptideMetadata():
         self.has_variants = has_variants
         self.segments = segments or []
         self.check_orf = check_orf
+        self.n_flank = n_flank
+        self.c_flank = c_flank
 
     def get_key(self) -> str:
         """ get key """
@@ -124,10 +127,13 @@ class PeptideSegment:
 
 class AnnotatedPeptideLabel:
     """ Annotated peptide label """
-    def __init__(self, label:str, segments:List[PeptideSegment]):
+    def __init__(self, label:str, segments:List[PeptideSegment],
+            n_flank:str='', c_flank:str=''):
         """ constructor """
         self.label = label
         self.segments = segments
+        self.n_flank = n_flank
+        self.c_flank = c_flank
 
     def to_lines(self) -> str:
         """ to line """
@@ -234,6 +240,16 @@ class PVGNodePath():
             if v.variant != node.global_variant and v.variant not in self.global_variants:
                 return True
         return False
+
+    def get_start_boundary(self, start_offset:int=0) -> Tuple[PVGNode, int]:
+        """Get peptide start boundary from this node path."""
+        return self.nodes[0], int(start_offset)
+
+    def get_end_boundary(self, end_offset:int=None) -> Tuple[PVGNode, int]:
+        """Get peptide end boundary from this node path."""
+        if end_offset is None:
+            end_offset = len(self.nodes[-1].seq.seq)
+        return self.nodes[-1], int(end_offset)
 
 class PVGNodePathArchipel(PVGNodePath):
     """ PVGNodePathArchipel """
@@ -421,7 +437,9 @@ class PVGCandidateNodePaths():
     def __init__(self, data:Deque[PVGNodePath],
             cleavage_params:CleavageParams, orfs:List[PVGOrf]=None, tx_id:str=None,
             gene_id:str=None, leading_node:PVGNode=None, subgraphs:SubgraphTree=None,
-            is_circ_rna:bool=False):
+            is_circ_rna:bool=False, context_length:int=0,
+            n_flank_cache:Dict[Tuple[str, int], Tuple[str, str]]=None,
+            c_flank_cache:Dict[Tuple[str, int], Tuple[str, str]]=None):
         """ constructor """
         self.data = data
         self.orfs = orfs or []
@@ -431,6 +449,211 @@ class PVGCandidateNodePaths():
         self.leading_node = leading_node
         self.subgraphs = subgraphs
         self.is_circ_rna = is_circ_rna
+        self.context_length = context_length
+        self.n_flank_cache = n_flank_cache if n_flank_cache is not None else {}
+        self.c_flank_cache = c_flank_cache if c_flank_cache is not None else {}
+        self.current_valid_orf:PVGOrf = None
+
+    def select_valid_orf(self, queue:List[PVGNode],
+            variants:Dict[str, VariantRecord], in_seq_variants:Dict[str, VariantRecord],
+            circ_rna:CircRNAModel=None) -> PVGOrf:
+        """Select a valid ORF for the current node path."""
+        for orf in self.orfs:
+            if self.is_circ_rna \
+                    and (any(v.is_circ_rna() for v in variants.values()) \
+                    or any(v.is_circ_rna() for v in orf.start_gain)):
+                if orf.is_valid_orf_to_node_path(queue, self.subgraphs, circ_rna):
+                    if any(n.is_missing_any_variant(in_seq_variants.values()) for n in queue):
+                        continue
+                    return orf
+            else:
+                return orf
+        return None
+
+    @staticmethod
+    def is_flank_eligible(node:PVGNode, bg_variants:Set[str]) -> bool:
+        """Whether a node can contribute to flank context."""
+        if node.seq is None:
+            return False
+        if str(node.seq.seq) == '*':
+            return False
+        if bg_variants is None:
+            bg_variants = set()
+        for variant in node.variants:
+            if variant.variant.id not in bg_variants:
+                return False
+        return True
+
+    @staticmethod
+    def _sorted_nodes(nodes:Iterable[PVGNode]) -> List[PVGNode]:
+        """Deterministic ordering for first-match flank search."""
+        return sorted(nodes, key=lambda x: x.id)
+
+    def _find_n_flank_recursive(self, node:PVGNode, needed:int,
+            bg_variants:Set[str], visited:Set[str]) -> str:
+        """Find first upstream flank context recursively."""
+        if needed <= 0:
+            return ''
+        if node.id in visited:
+            return None
+        visited = set(visited)
+        visited.add(node.id)
+
+        orf_start_node_id = None
+        orf_start_offset = 0
+        if self.current_valid_orf and self.current_valid_orf.start_node is not None:
+            orf_start_node_id = self.current_valid_orf.start_node.id
+            orf_start_offset = int(self.current_valid_orf.node_offset or 0)
+
+        for in_node in self._sorted_nodes(node.in_nodes):
+            if not self.is_flank_eligible(in_node, bg_variants):
+                continue
+            seq = str(in_node.seq.seq)
+            is_orf_start_node = orf_start_node_id is not None and in_node.id == orf_start_node_id
+            if is_orf_start_node:
+                # Do not include residues upstream of the ORF start.
+                seq = seq[max(0, orf_start_offset):]
+                if not seq:
+                    continue
+            if len(seq) >= needed:
+                return seq[-needed:]
+            if is_orf_start_node:
+                # Cannot traverse further upstream once ORF start node is reached.
+                return seq
+            upstream = self._find_n_flank_recursive(
+                node=in_node,
+                needed=needed - len(seq),
+                bg_variants=bg_variants,
+                visited=visited
+            )
+            if upstream is not None:
+                return upstream + seq
+            return seq
+        return None
+
+    def _find_c_flank_recursive(self, node:PVGNode, needed:int,
+            bg_variants:Set[str], visited:Set[str]) -> str:
+        """Find first downstream flank context recursively."""
+        if needed <= 0:
+            return ''
+        if node.id in visited:
+            return None
+        visited = set(visited)
+        visited.add(node.id)
+
+        for out_node in self._sorted_nodes(node.out_nodes):
+            if not self.is_flank_eligible(out_node, bg_variants):
+                continue
+            seq = str(out_node.seq.seq)
+            if len(seq) >= needed:
+                return seq[:needed]
+            downstream = self._find_c_flank_recursive(
+                node=out_node,
+                needed=needed - len(seq),
+                bg_variants=bg_variants,
+                visited=visited
+            )
+            if downstream is not None:
+                return seq + downstream
+            return seq
+        return None
+
+    def get_n_flank(self, start_node:PVGNode, start_offset:int,
+            bg_variants:Set[str]) -> Tuple[str, str]:
+        """Get N flank from boundary with shared cache."""
+        # `start_node` can be a copied/truncated node without in_nodes.
+        # Resolve upstream traversal anchor to the original leading node
+        # when IDs match, but keep local boundary context from start_node.
+        anchor_node = start_node
+        if self.leading_node is not None and start_node.id == self.leading_node.id:
+            anchor_node = self.leading_node
+
+        key = (anchor_node.id, int(start_offset), str(start_node.seq.seq))
+        if key in self.n_flank_cache:
+            return self.n_flank_cache[key]
+
+        target = self.context_length
+        local = str(start_node.seq.seq)[:max(0, int(start_offset))]
+        if self.current_valid_orf and self.current_valid_orf.start_node is not None \
+                and start_node.id == self.current_valid_orf.start_node.id:
+            # Local prefix must not include residues before ORF start.
+            local = local[max(0, int(self.current_valid_orf.node_offset or 0)):]
+        if len(local) >= target:
+            result = (local[-target:], 'ok')
+            self.n_flank_cache[key] = result
+            return result
+
+        needed = target - len(local)
+        if self.current_valid_orf and self.current_valid_orf.start_node is not None \
+                and anchor_node.id == self.current_valid_orf.start_node.id:
+            upstream = None
+        else:
+            upstream = self._find_n_flank_recursive(
+                node=anchor_node,
+                needed=needed,
+                bg_variants=bg_variants,
+                visited=set()
+            )
+        if upstream is None:
+            result = (local, 'truncated' if local else 'not_found')
+        else:
+            result = (upstream + local, 'ok')
+        self.n_flank_cache[key] = result
+        return result
+
+    def get_c_flank(self, end_node:PVGNode, end_offset:int,
+            bg_variants:Set[str]) -> Tuple[str, str]:
+        """Get C flank from boundary with shared cache."""
+        key = (end_node.id, int(end_offset), str(end_node.seq.seq))
+        if key in self.c_flank_cache:
+            return self.c_flank_cache[key]
+
+        target = self.context_length
+        local = str(end_node.seq.seq)[max(0, int(end_offset)):]
+        if len(local) >= target:
+            result = (local[:target], 'ok')
+            self.c_flank_cache[key] = result
+            return result
+
+        needed = target - len(local)
+        downstream = self._find_c_flank_recursive(
+            node=end_node,
+            needed=needed,
+            bg_variants=bg_variants,
+            visited=set()
+        )
+        if downstream is None:
+            result = (local, 'truncated' if local else 'not_found')
+        else:
+            result = (local + downstream, 'ok')
+        self.c_flank_cache[key] = result
+        return result
+
+    def compute_flanks_for_path(self, path:PVGNodePath, start_offset:int, end_offset:int,
+            bg_variants:Set[str], start_node:PVGNode=None,
+            end_node:PVGNode=None) -> Tuple[str, str]:
+        """Compute peptide N/C flanking context for a path boundary."""
+        if self.context_length <= 0:
+            return '', ''
+        if start_node is None:
+            start_node, start_offset = path.get_start_boundary(start_offset=start_offset)
+        else:
+            start_offset = int(start_offset)
+        if end_node is None:
+            end_node, end_offset = path.get_end_boundary(end_offset=end_offset)
+        else:
+            end_offset = int(end_offset)
+        n_flank, _ = self.get_n_flank(
+            start_node=start_node,
+            start_offset=start_offset,
+            bg_variants=bg_variants
+        )
+        c_flank, _ = self.get_c_flank(
+            end_node=end_node,
+            end_offset=end_offset,
+            bg_variants=bg_variants
+        )
+        return n_flank, c_flank
 
 
     def is_valid_seq(self, seq:Seq, pool:Set[Seq], denylist:Set[str]) -> bool:
@@ -563,24 +786,18 @@ class PVGCandidateNodePaths():
                                 if variant.id not in variants:
                                     variants[variant.id] = variant
 
-            valid_orf = None
-            for orf in self.orfs:
-                if self.is_circ_rna \
-                        and (any(v.is_circ_rna() for v in variants.values()) \
-                        or any(v.is_circ_rna() for v in orf.start_gain)):
-                    if orf.is_valid_orf_to_node_path(queue, self.subgraphs, circ_rna):
-                        if any(n.is_missing_any_variant(in_seq_variants.values()) for n in queue):
-                            continue
-                        metadata.orf = tuple(orf.orf)
-                        valid_orf = orf
-                        break
-                else:
-                    metadata.orf = tuple(orf.orf)
-                    valid_orf = orf
-                    break
+            valid_orf = self.select_valid_orf(
+                queue=queue,
+                variants=variants,
+                in_seq_variants=in_seq_variants,
+                circ_rna=circ_rna
+            )
+            if valid_orf is not None:
+                metadata.orf = tuple(valid_orf.orf)
 
             if valid_orf is None:
                 continue
+            self.current_valid_orf = valid_orf
 
             cleavage_gain_down = queue[-1].get_cleavage_gain_from_downstream()
             for v in cleavage_gain_down:
@@ -640,17 +857,22 @@ class PVGCandidateNodePaths():
             seqs = self.translational_modification(seq, metadata, denylist,
                 variants.values(), is_start_codon, selenocysteines,
                 check_variants, check_external_variants, pool, queue,
-                clip_nterm_m
+                clip_nterm_m,
+                bg_variants={
+                    v.id for v in series.global_variants if v is not None
+                }
             )
             for seq, metadata in seqs:
                 yield seq, metadata
+            self.current_valid_orf = None
 
 
     def translational_modification(self, seq:Seq, metadata:PVGPeptideMetadata,
             denylist:Set[str], variants:Set[VariantRecord], is_start_codon:bool,
             selenocysteines:List[seqvar.VariantRecordWithCoordinate],
             check_variants:bool, check_external_variants:bool, pool:Set[Seq],
-            nodes:List[PVGNode], clip_nterm_m:bool
+            nodes:List[PVGNode], clip_nterm_m:bool,
+            bg_variants:Set[str]=None
             ) -> Iterable[Tuple[Seq,PVGPeptideMetadata]]:
         """ Apply any modification that could happen during translation. The
         kinds of modifications that could happen are:
@@ -682,14 +904,34 @@ class PVGCandidateNodePaths():
                 if is_valid:
                     cur_metadata_2 = copy.copy(cur_metadata)
                     cur_metadata_2.segments = self.create_peptide_segments(nodes)
+                    if self.context_length > 0:
+                        n_flank, c_flank = self.compute_flanks_for_path(
+                            path=PVGNodePath(nodes=nodes, additional_variants=set()),
+                            start_offset=0,
+                            end_offset=len(nodes[-1].seq.seq),
+                            bg_variants=bg_variants
+                        )
+                        cur_metadata_2.n_flank = n_flank
+                        cur_metadata_2.c_flank = c_flank
                     yield seq, cur_metadata_2
 
                 if clip_nterm_m and is_valid_start:
                     cur_seq=seq[1:]
                     cur_nodes = list(nodes)
-                    cur_nodes[0] = cur_nodes[0].copy()
+                    cur_nodes[0] = cur_nodes[0].copy(id=True)
                     cur_nodes[0].truncate_left(1)
                     cur_metadata.segments = self.create_peptide_segments(cur_nodes)
+                    if self.context_length > 0:
+                        n_flank, c_flank = self.compute_flanks_for_path(
+                            path=PVGNodePath(nodes=nodes, additional_variants=set()),
+                            start_offset=1,
+                            end_offset=len(nodes[-1].seq.seq),
+                            bg_variants=bg_variants
+                        )
+                        # Initiator Met clipping yields the N-terminus peptide.
+                        # The clipped Met is not reported as N-flank context.
+                        cur_metadata.n_flank = ''
+                        cur_metadata.c_flank = c_flank
                     yield cur_seq, cur_metadata
 
         # Selenocysteine termination
@@ -716,12 +958,16 @@ class PVGCandidateNodePaths():
                 if is_valid or is_valid_start:
                     cur_nodes:List[PVGNode] = []
                     cut_offset = sec.location.start
+                    cut_node = nodes[-1]
+                    cut_node_offset = len(nodes[-1].seq.seq)
                     for node in nodes:
                         if cut_offset == 0:
                             cur_nodes.append(node)
                             continue
                         if len(node.seq.seq) > cut_offset:
-                            node = node.copy()
+                            cut_node = node
+                            cut_node_offset = cut_offset
+                            node = node.copy(id=True)
                             node.truncate_right(cut_offset)
                             cur_nodes.append(node)
                             cut_offset = 0
@@ -732,14 +978,35 @@ class PVGCandidateNodePaths():
                     if is_valid:
                         cur_metadata_2 = copy.copy(cur_metadata)
                         cur_metadata_2.segments = self.create_peptide_segments(cur_nodes)
+                        if self.context_length > 0:
+                            n_flank, c_flank = self.compute_flanks_for_path(
+                                path=PVGNodePath(nodes=cur_nodes, additional_variants=set()),
+                                start_offset=0,
+                                end_offset=cut_node_offset,
+                                bg_variants=bg_variants,
+                                end_node=cut_node
+                            )
+                            cur_metadata_2.n_flank = n_flank
+                            cur_metadata_2.c_flank = c_flank
                         yield seq_mod, cur_metadata_2
 
                     if is_valid_start:
                         cur_metadata_2 = copy.copy(cur_metadata)
                         cur_seq=seq_mod[1:]
-                        cur_nodes[0] = cur_nodes[0].copy()
+                        cur_nodes[0] = cur_nodes[0].copy(id=True)
                         cur_nodes[0].truncate_left(1)
                         cur_metadata_2.segments = self.create_peptide_segments(cur_nodes)
+                        if self.context_length > 0:
+                            n_flank, c_flank = self.compute_flanks_for_path(
+                                path=PVGNodePath(nodes=nodes, additional_variants=set()),
+                                start_offset=1,
+                                end_offset=cut_node_offset,
+                                bg_variants=bg_variants,
+                                end_node=cut_node
+                            )
+                            # Same rule as above for N-terminal initiator Met clipping.
+                            cur_metadata_2.n_flank = ''
+                            cur_metadata_2.c_flank = c_flank
                         yield cur_seq, cur_metadata_2
 
     @staticmethod
@@ -829,7 +1096,8 @@ class PVGPeptideFinder():
             seqs:Set[Seq]=None, labels:Dict[str,int]=None, mode:str='misc',
             global_variant:VariantRecord=None, gene_id:str=None,
             truncate_sec:bool=False, w2f:bool=False, check_external_variants:bool=True,
-            cleavage_params:CleavageParams=None, check_orf:bool=False):
+            cleavage_params:CleavageParams=None, check_orf:bool=False,
+            context_length:int=0):
         """ constructor """
         assert mode in [m.value for m in constant.PeptideFindingMode]
         self.tx_id = tx_id
@@ -844,6 +1112,9 @@ class PVGPeptideFinder():
         self.check_external_variants = check_external_variants
         self.cleavage_params = cleavage_params
         self.check_orf = check_orf
+        self.context_length = max(0, int(context_length))
+        self.n_flank_cache:Dict[Tuple[str, int], Tuple[str, str]] = {}
+        self.c_flank_cache:Dict[Tuple[str, int], Tuple[str, str]] = {}
 
     def find_candidate_node_paths_misc(self, node:PVGNode, orfs:List[PVGOrf],
             cleavage_params:CleavageParams, tx_id:str, gene_id:str,
@@ -888,7 +1159,10 @@ class PVGPeptideFinder():
             gene_id=gene_id,
             leading_node=leading_node,
             subgraphs=subgraphs,
-            is_circ_rna=is_circ_rna
+            is_circ_rna=is_circ_rna,
+            context_length=self.context_length,
+            n_flank_cache=self.n_flank_cache if self.context_length > 0 else None,
+            c_flank_cache=self.c_flank_cache if self.context_length > 0 else None
         )
 
         if not (node.cpop_collapsed or node.truncated) and \
@@ -983,7 +1257,10 @@ class PVGPeptideFinder():
             gene_id=gene_id,
             leading_node=leading_node,
             subgraphs=subgraphs,
-            is_circ_rna=is_circ_rna
+            is_circ_rna=is_circ_rna,
+            context_length=self.context_length,
+            n_flank_cache=self.n_flank_cache if self.context_length > 0 else None,
+            c_flank_cache=self.c_flank_cache if self.context_length > 0 else None
         )
 
         if any(v.variant != node.global_variant for v in node.variants):
@@ -1098,7 +1375,10 @@ class PVGPeptideFinder():
             gene_id=gene_id,
             leading_node=leading_node,
             subgraphs=subgraphs,
-            is_circ_rna=is_circ_rna
+            is_circ_rna=is_circ_rna,
+            context_length=self.context_length,
+            n_flank_cache=self.n_flank_cache if self.context_length > 0 else None,
+            c_flank_cache=self.c_flank_cache if self.context_length > 0 else None
         )
 
         # Build path of min_length nodes first
@@ -1359,7 +1639,12 @@ class PVGPeptideFinder():
                     self.labels[label] = 1
                 label += f"|{self.labels[label]}"
                 labels.append(label)
-                seq_anno = AnnotatedPeptideLabel(label, metadata.segments)
+                seq_anno = AnnotatedPeptideLabel(
+                    label=label,
+                    segments=metadata.segments,
+                    n_flank=metadata.n_flank,
+                    c_flank=metadata.c_flank
+                )
                 if seq in peptide_segments:
                     peptide_segments[seq].append(seq_anno)
                 else:
