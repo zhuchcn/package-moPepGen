@@ -453,6 +453,7 @@ class PVGCandidateNodePaths():
         self.n_flank_cache = n_flank_cache if n_flank_cache is not None else {}
         self.c_flank_cache = c_flank_cache if c_flank_cache is not None else {}
         self.current_valid_orf:PVGOrf = None
+        self.force_init_met = False
 
     def select_valid_orf(self, queue:List[PVGNode],
             variants:Dict[str, VariantRecord], in_seq_variants:Dict[str, VariantRecord],
@@ -471,27 +472,42 @@ class PVGCandidateNodePaths():
         return None
 
     @staticmethod
-    def is_flank_eligible(node:PVGNode, bg_variants:Set[str]) -> bool:
+    def is_flank_eligible(node:PVGNode, allowed_variants:Set[str]) -> bool:
         """Whether a node can contribute to flank context."""
         if node.seq is None:
             return False
-        if str(node.seq.seq) == '*':
-            return False
-        if bg_variants is None:
-            bg_variants = set()
+        if allowed_variants is None:
+            allowed_variants = set()
         for variant in node.variants:
-            if variant.variant.id not in bg_variants:
+            if variant.variant.id not in allowed_variants:
                 return False
         return True
 
     @staticmethod
     def _sorted_nodes(nodes:Iterable[PVGNode]) -> List[PVGNode]:
         """Deterministic ordering for first-match flank search."""
-        return sorted(nodes, key=lambda x: x.id)
+        def _node_sort_key(node:PVGNode):
+            n_variants = len(node.variants) if node.variants is not None else 0
+            if not node.variants:
+                return (n_variants, ())
+            variant_signature = []
+            for v in node.variants:
+                var = v.variant
+                variant_signature.append((
+                    int(var.location.start),
+                    int(var.location.end),
+                    str(var.alt)
+                ))
+            variant_signature.sort()
+            return (
+                n_variants,
+                tuple(variant_signature)
+            )
+        return sorted(nodes, key=_node_sort_key)
 
     def _find_n_flank_recursive(self, node:PVGNode, needed:int,
-            bg_variants:Set[str], visited:Set[str]) -> str:
-        """Find first upstream flank context recursively."""
+            allowed_variants:Set[str], visited:Set[str]) -> str:
+        """Find upstream flank context with DFS/backtracking."""
         if needed <= 0:
             return ''
         if node.id in visited:
@@ -505,35 +521,54 @@ class PVGCandidateNodePaths():
             orf_start_node_id = self.current_valid_orf.start_node.id
             orf_start_offset = int(self.current_valid_orf.node_offset or 0)
 
+        best_partial = None
         for in_node in self._sorted_nodes(node.in_nodes):
-            if not self.is_flank_eligible(in_node, bg_variants):
+            if not self.is_flank_eligible(in_node, allowed_variants):
                 continue
             seq = str(in_node.seq.seq)
+            if seq == '*':
+                # Upstream canonical stop contributes no residues.
+                if not in_node.variants:
+                    candidate = ''
+                    if best_partial is None or len(candidate) > len(best_partial):
+                        best_partial = candidate
+                continue
             is_orf_start_node = orf_start_node_id is not None and in_node.id == orf_start_node_id
             if is_orf_start_node:
                 # Do not include residues upstream of the ORF start.
                 seq = seq[max(0, orf_start_offset):]
+                # Align with peptide translation: initiator codon is normalized to Met.
+                if self.force_init_met and seq and seq[0] != 'M':
+                    seq = 'M' + seq[1:]
                 if not seq:
                     continue
             if len(seq) >= needed:
                 return seq[-needed:]
             if is_orf_start_node:
                 # Cannot traverse further upstream once ORF start node is reached.
-                return seq
+                candidate = seq
+                if best_partial is None or len(candidate) > len(best_partial):
+                    best_partial = candidate
+                continue
             upstream = self._find_n_flank_recursive(
                 node=in_node,
                 needed=needed - len(seq),
-                bg_variants=bg_variants,
+                allowed_variants=allowed_variants,
                 visited=visited
             )
             if upstream is not None:
-                return upstream + seq
-            return seq
-        return None
+                candidate = upstream + seq
+                if len(candidate) >= needed:
+                    return candidate[-needed:]
+            else:
+                candidate = seq
+            if best_partial is None or len(candidate) > len(best_partial):
+                best_partial = candidate
+        return best_partial
 
     def _find_c_flank_recursive(self, node:PVGNode, needed:int,
-            bg_variants:Set[str], visited:Set[str]) -> str:
-        """Find first downstream flank context recursively."""
+            allowed_variants:Set[str], visited:Set[str]) -> str:
+        """Find downstream flank context with DFS/backtracking."""
         if needed <= 0:
             return ''
         if node.id in visited:
@@ -541,22 +576,48 @@ class PVGCandidateNodePaths():
         visited = set(visited)
         visited.add(node.id)
 
+        best_partial = None
         for out_node in self._sorted_nodes(node.out_nodes):
-            if not self.is_flank_eligible(out_node, bg_variants):
+            if not self.is_flank_eligible(out_node, allowed_variants):
                 continue
             seq = str(out_node.seq.seq)
+            if seq == '*':
+                # Canonical stop terminates this branch and contributes no residues.
+                if not out_node.variants:
+                    candidate = ''
+                    if best_partial is None or len(candidate) > len(best_partial):
+                        best_partial = candidate
+                    continue
+                # Stop gain/lost node can be traversed as 0-aa bridge.
+                downstream = self._find_c_flank_recursive(
+                    node=out_node,
+                    needed=needed,
+                    allowed_variants=allowed_variants,
+                    visited=visited
+                )
+                candidate = downstream if downstream is not None else ''
+                if candidate is not None and len(candidate) >= needed:
+                    return candidate[:needed]
+                if best_partial is None or len(candidate) > len(best_partial):
+                    best_partial = candidate
+                continue
             if len(seq) >= needed:
                 return seq[:needed]
             downstream = self._find_c_flank_recursive(
                 node=out_node,
                 needed=needed - len(seq),
-                bg_variants=bg_variants,
+                allowed_variants=allowed_variants,
                 visited=visited
             )
             if downstream is not None:
-                return seq + downstream
-            return seq
-        return None
+                candidate = seq + downstream
+                if len(candidate) >= needed:
+                    return candidate[:needed]
+            else:
+                candidate = seq
+            if best_partial is None or len(candidate) > len(best_partial):
+                best_partial = candidate
+        return best_partial
 
     def get_n_flank(self, start_node:PVGNode, start_offset:int,
             bg_variants:Set[str]) -> Tuple[str, str]:
@@ -568,16 +629,26 @@ class PVGCandidateNodePaths():
         if self.leading_node is not None and start_node.id == self.leading_node.id:
             anchor_node = self.leading_node
 
-        key = (anchor_node.id, int(start_offset), str(start_node.seq.seq))
+        key = (
+            anchor_node.id,
+            int(start_offset),
+            str(start_node.seq.seq)
+        )
         if key in self.n_flank_cache:
             return self.n_flank_cache[key]
+
+        allowed_variants = set(bg_variants or set())
+        allowed_variants.update(v.variant.id for v in start_node.variants)
 
         target = self.context_length
         local = str(start_node.seq.seq)[:max(0, int(start_offset))]
         if self.current_valid_orf and self.current_valid_orf.start_node is not None \
-                and start_node.id == self.current_valid_orf.start_node.id:
+                and start_node is self.current_valid_orf.start_node:
             # Local prefix must not include residues before ORF start.
-            local = local[max(0, int(self.current_valid_orf.node_offset or 0)):]
+            orf_start_offset = int(self.current_valid_orf.node_offset or 0)
+            local = local[max(0, orf_start_offset):]
+            if self.force_init_met and local and local[0] != 'M':
+                local = 'M' + local[1:]
         if len(local) >= target:
             result = (local[-target:], 'ok')
             self.n_flank_cache[key] = result
@@ -591,7 +662,7 @@ class PVGCandidateNodePaths():
             upstream = self._find_n_flank_recursive(
                 node=anchor_node,
                 needed=needed,
-                bg_variants=bg_variants,
+                allowed_variants=allowed_variants,
                 visited=set()
             )
         if upstream is None:
@@ -608,6 +679,9 @@ class PVGCandidateNodePaths():
         if key in self.c_flank_cache:
             return self.c_flank_cache[key]
 
+        allowed_variants = set(bg_variants or set())
+        allowed_variants.update(v.variant.id for v in end_node.variants)
+
         target = self.context_length
         local = str(end_node.seq.seq)[max(0, int(end_offset)):]
         if len(local) >= target:
@@ -619,7 +693,7 @@ class PVGCandidateNodePaths():
         downstream = self._find_c_flank_recursive(
             node=end_node,
             needed=needed,
-            bg_variants=bg_variants,
+            allowed_variants=allowed_variants,
             visited=set()
         )
         if downstream is None:
@@ -747,6 +821,7 @@ class PVGCandidateNodePaths():
               transcript.
             - `truncate_sec` (bool): Whether to call selenocysteine truncation.
         """
+        self.force_init_met = force_init_met
         for series in self.data:
             queue = series.nodes
             metadata = PVGPeptideMetadata(check_orf=check_orf)
@@ -923,14 +998,12 @@ class PVGCandidateNodePaths():
                     cur_metadata.segments = self.create_peptide_segments(cur_nodes)
                     if self.context_length > 0:
                         n_flank, c_flank = self.compute_flanks_for_path(
-                            path=PVGNodePath(nodes=nodes, additional_variants=set()),
-                            start_offset=1,
+                            path=PVGNodePath(nodes=cur_nodes, additional_variants=set()),
+                            start_offset=0,
                             end_offset=len(nodes[-1].seq.seq),
                             bg_variants=bg_variants
                         )
-                        # Initiator Met clipping yields the N-terminus peptide.
-                        # The clipped Met is not reported as N-flank context.
-                        cur_metadata.n_flank = ''
+                        cur_metadata.n_flank = n_flank
                         cur_metadata.c_flank = c_flank
                     yield cur_seq, cur_metadata
 
@@ -998,14 +1071,13 @@ class PVGCandidateNodePaths():
                         cur_metadata_2.segments = self.create_peptide_segments(cur_nodes)
                         if self.context_length > 0:
                             n_flank, c_flank = self.compute_flanks_for_path(
-                                path=PVGNodePath(nodes=nodes, additional_variants=set()),
-                                start_offset=1,
+                                path=PVGNodePath(nodes=cur_nodes, additional_variants=set()),
+                                start_offset=0,
                                 end_offset=cut_node_offset,
                                 bg_variants=bg_variants,
                                 end_node=cut_node
                             )
-                            # Same rule as above for N-terminal initiator Met clipping.
-                            cur_metadata_2.n_flank = ''
+                            cur_metadata_2.n_flank = n_flank
                             cur_metadata_2.c_flank = c_flank
                         yield cur_seq, cur_metadata_2
 
@@ -1528,6 +1600,15 @@ class PVGPeptideFinder():
             key = metadata.get_key()
             if key not in val:
                 val[key] = metadata
+            else:
+                # Same peptide key can be reached by multiple equivalent paths.
+                # Keep first metadata, but enrich missing flank context if a
+                # later occurrence provides it.
+                existing = val[key]
+                if not existing.n_flank and metadata.n_flank:
+                    existing.n_flank = metadata.n_flank
+                if not existing.c_flank and metadata.c_flank:
+                    existing.c_flank = metadata.c_flank
             self.seqs.add(seq)
 
     def find_codon_reassignments(self, seq:Seq, w2f:bool=False) -> List[VariantRecord]:

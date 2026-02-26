@@ -1,0 +1,4 @@
+chr1	.	gene	1	462	.	+	.	 gene_id b0556; gene_name rzpD; gene_biotype protein_coding;
+chr1	.	transcript	1	462	.	+	.	 gene_id b0556; transcript_id AAC73657; gene_name rzpD; gene_biotype protein_coding; tag Ensembl_canonical;
+chr1	.	CDS	1	459	.	+	0	 gene_id b0556; transcript_id AAC73657; gene_name rzpD; gene_biotype protein_coding; protein_id AAC73657; tag Ensembl_canonical;
+chr1	.	exon	1	462	.	+	.	 gene_id b0556; transcript_id AAC73657; gene_name rzpD; gene_biotype protein_coding; tag Ensembl_canonical;

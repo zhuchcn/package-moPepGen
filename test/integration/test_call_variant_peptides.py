@@ -78,6 +78,7 @@ def create_args_generate_index(work_dir:Path, data_dir:Path) -> argparse.Namespa
     args.cleavage_exception = 'trypsin_exception'
     args.peptide_finding_mode = 'misc'
     args.flanking_size = 10
+    args.output_flanking = False
     args.min_mw = 500.
     args.min_length = 7
     args.max_length = 25
@@ -228,6 +229,124 @@ class TestCallVariantPeptides(TestCaseIntegration):
         }
         self.assertEqual(files, expected)
         self.assert_flanking_table_consistent(args.output_path, args.context_length)
+
+    def test_call_variant_peptide_output_flanking_case_1(self):
+        """ Test case for flanking table from SRR1770413 AAC76584 """
+        args = create_base_args()
+        args.input_path = [
+            self.data_dir/'comb/SRR1770413_AAC76584/SNP.gvf'
+        ]
+        ref_dir = self.data_dir/'downsampled_reference/AAC76584'
+        args.output_path = self.work_dir/'vep_moPepGen.fasta'
+        args.genome_fasta = ref_dir/'genome.fasta'
+        args.annotation_gtf = ref_dir/'annotation.gtf'
+        args.proteome_fasta = ref_dir/'proteome.fasta'
+        args.output_flanking = True
+        args.context_length = 16
+        cli.call_variant_peptide(args)
+
+        files = {str(file.name) for file in self.work_dir.glob('*')}
+        expected = {
+            'vep_moPepGen.fasta',
+            'vep_moPepGen_peptide_table.txt',
+            'vep_moPepGen_flanking_table.txt'
+        }
+        self.assertEqual(files, expected)
+
+        with open(self.work_dir/'vep_moPepGen_flanking_table.txt', 'rt') as handle:
+            n_flanks = []
+            seqs = []
+            for line in handle:
+                if line.startswith('#'):
+                    continue
+                fields = line.rstrip('\n').split('\t')
+                n_flanks.append(fields[2])
+                seqs.append(fields[0])
+        self.assertEqual(
+            set(seqs),
+            {'ALGPEPMAAAYVQPSR', 'ALGPEPMAAAYVQPSRRPTDGR'}
+        )
+        self.assertEqual(
+            set(n_flanks),
+            {'DMEVGAGTSHPMTCLR'}
+        )
+
+    def test_call_variant_peptide_output_flanking_case_2(self):
+        """ Test case for flanking table from SRR1770413 AAC74454 """
+        args = create_base_args()
+        args.input_path = [
+            self.data_dir/'comb/SRR1770413_AAC74454/SNP.gvf'
+        ]
+        ref_dir = self.data_dir/'downsampled_reference/AAC74454'
+        args.output_path = self.work_dir/'vep_moPepGen.fasta'
+        args.genome_fasta = ref_dir/'genome.fasta'
+        args.annotation_gtf = ref_dir/'annotation.gtf'
+        args.proteome_fasta = ref_dir/'proteome.fasta'
+        args.output_flanking = True
+        args.context_length = 16
+        cli.call_variant_peptide(args)
+
+        files = {str(file.name) for file in self.work_dir.glob('*')}
+        expected = {
+            'vep_moPepGen.fasta',
+            'vep_moPepGen_peptide_table.txt',
+            'vep_moPepGen_flanking_table.txt'
+        }
+        self.assertEqual(files, expected)
+
+        with open(self.work_dir/'vep_moPepGen_flanking_table.txt', 'rt') as handle:
+            data:dict[str, tuple[str, str]] = {}
+            for line in handle:
+                if line.startswith('#'):
+                    continue
+                fields = line.rstrip('\n').split('\t')
+                seq = fields[0]
+                n_flank = fields[2]
+                c_flank = fields[3]
+                data[seq] = (n_flank, c_flank)
+        self.assertEqual(
+            data['EAAKSSETNASSSAGR'][1],
+            'AASSATAAGNSAKAAK'
+        )
+
+    def test_call_variant_peptide_output_flanking_case_3(self):
+        """ Test case for flanking table from SRR1770413 AAC73657/ """
+        args = create_base_args()
+        args.input_path = [
+            self.data_dir/'comb/SRR1770413_AAC73657/SNP.gvf'
+        ]
+        ref_dir = self.data_dir/'downsampled_reference/AAC73657'
+        args.output_path = self.work_dir/'vep_moPepGen.fasta'
+        args.genome_fasta = ref_dir/'genome.fasta'
+        args.annotation_gtf = ref_dir/'annotation.gtf'
+        args.proteome_fasta = ref_dir/'proteome.fasta'
+        args.output_flanking = True
+        args.context_length = 16
+        args.codon_table = 'Bacterial'
+        cli.call_variant_peptide(args)
+
+        files = {str(file.name) for file in self.work_dir.glob('*')}
+        expected = {
+            'vep_moPepGen.fasta',
+            'vep_moPepGen_peptide_table.txt',
+            'vep_moPepGen_flanking_table.txt'
+        }
+        self.assertEqual(files, expected)
+
+        with open(self.work_dir/'vep_moPepGen_flanking_table.txt', 'rt') as handle:
+            data:dict[str, tuple[str, str]] = {}
+            for line in handle:
+                if line.startswith('#'):
+                    continue
+                fields = line.rstrip('\n').split('\t')
+                seq = fields[0]
+                n_flank = fields[2]
+                c_flank = fields[3]
+                data[seq] = (n_flank, c_flank)
+        self.assertEqual(
+            data['VTAIISALVICIIVSLSWAVNHYR'][0],
+            'MSR'
+        )
 
     def test_call_variant_peptide_archipel(self):
         """ Enzyme None """
