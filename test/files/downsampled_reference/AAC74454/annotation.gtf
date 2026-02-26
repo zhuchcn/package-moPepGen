@@ -1,0 +1,4 @@
+chr1	.	gene	1	3363	.	+	.	 gene_id b1372; gene_name stfR; gene_biotype protein_coding;
+chr1	.	transcript	1	3363	.	+	.	 gene_id b1372; transcript_id AAC74454; gene_name stfR; gene_biotype protein_coding; tag Ensembl_canonical;
+chr1	.	CDS	1	3360	.	+	0	 gene_id b1372; transcript_id AAC74454; gene_name stfR; gene_biotype protein_coding; protein_id AAC74454; tag Ensembl_canonical;
+chr1	.	exon	1	3363	.	+	.	 gene_id b1372; transcript_id AAC74454; gene_name stfR; gene_biotype protein_coding; tag Ensembl_canonical;

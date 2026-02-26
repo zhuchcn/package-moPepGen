@@ -1,0 +1,15 @@
+##fileformat=VCFv4.2
+##mopepgen_version=1.5.1-rc4
+##parser=parseVEP
+##reference_index=/mnt/s3bucket/ref/index/moPepGen/1.5.1-rc4
+##genome_fasta=
+##annotation_gtf=
+##source=SNP
+##CHROM=<Description="Gene ID">
+##INFO=<ID=TRANSCRIPT_ID,Number=1,Type=String,Description="Transcript ID">
+##INFO=<ID=GENE_SYMBOL,Number=1,Type=String,Description="Gene Symbol">
+##INFO=<ID=GENOMIC_POSITION,Number=1,Type=String,Description="Genomic Position">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+b1372	772	SNV-772-A-G	A	G	.	.	TRANSCRIPT_ID=AAC74454;GENOMIC_POSITION=Chromosome:1429820;GENE_SYMBOL=stfR
+b1372	775	SNV-775-A-C	A	C	.	.	TRANSCRIPT_ID=AAC74454;GENOMIC_POSITION=Chromosome:1429823;GENE_SYMBOL=stfR
+b1372	815	SNV-815-A-G	A	G	.	.	TRANSCRIPT_ID=AAC74454;GENOMIC_POSITION=Chromosome:1429863;GENE_SYMBOL=stfR
