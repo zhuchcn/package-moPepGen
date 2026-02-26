@@ -453,6 +453,7 @@ class PVGCandidateNodePaths():
         self.n_flank_cache = n_flank_cache if n_flank_cache is not None else {}
         self.c_flank_cache = c_flank_cache if c_flank_cache is not None else {}
         self.current_valid_orf:PVGOrf = None
+        self.force_init_met = False
 
     def select_valid_orf(self, queue:List[PVGNode],
             variants:Dict[str, VariantRecord], in_seq_variants:Dict[str, VariantRecord],
@@ -536,6 +537,9 @@ class PVGCandidateNodePaths():
             if is_orf_start_node:
                 # Do not include residues upstream of the ORF start.
                 seq = seq[max(0, orf_start_offset):]
+                # Align with peptide translation: initiator codon is normalized to Met.
+                if self.force_init_met and seq and seq[0] != 'M':
+                    seq = 'M' + seq[1:]
                 if not seq:
                     continue
             if len(seq) >= needed:
@@ -625,7 +629,11 @@ class PVGCandidateNodePaths():
         if self.leading_node is not None and start_node.id == self.leading_node.id:
             anchor_node = self.leading_node
 
-        key = (anchor_node.id, int(start_offset), str(start_node.seq.seq))
+        key = (
+            anchor_node.id,
+            int(start_offset),
+            str(start_node.seq.seq)
+        )
         if key in self.n_flank_cache:
             return self.n_flank_cache[key]
 
@@ -637,7 +645,10 @@ class PVGCandidateNodePaths():
         if self.current_valid_orf and self.current_valid_orf.start_node is not None \
                 and start_node is self.current_valid_orf.start_node:
             # Local prefix must not include residues before ORF start.
-            local = local[max(0, int(self.current_valid_orf.node_offset or 0)):]
+            orf_start_offset = int(self.current_valid_orf.node_offset or 0)
+            local = local[max(0, orf_start_offset):]
+            if self.force_init_met and local and local[0] != 'M':
+                local = 'M' + local[1:]
         if len(local) >= target:
             result = (local[-target:], 'ok')
             self.n_flank_cache[key] = result
@@ -810,6 +821,7 @@ class PVGCandidateNodePaths():
               transcript.
             - `truncate_sec` (bool): Whether to call selenocysteine truncation.
         """
+        self.force_init_met = force_init_met
         for series in self.data:
             queue = series.nodes
             metadata = PVGPeptideMetadata(check_orf=check_orf)

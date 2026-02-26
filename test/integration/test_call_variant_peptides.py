@@ -309,6 +309,45 @@ class TestCallVariantPeptides(TestCaseIntegration):
             'AASSATAAGNSAKAAK'
         )
 
+    def test_call_variant_peptide_output_flanking_case_3(self):
+        """ Test case for flanking table from SRR1770413 AAC73657/ """
+        args = create_base_args()
+        args.input_path = [
+            self.data_dir/'comb/SRR1770413_AAC73657/SNP.gvf'
+        ]
+        ref_dir = self.data_dir/'downsampled_reference/AAC73657'
+        args.output_path = self.work_dir/'vep_moPepGen.fasta'
+        args.genome_fasta = ref_dir/'genome.fasta'
+        args.annotation_gtf = ref_dir/'annotation.gtf'
+        args.proteome_fasta = ref_dir/'proteome.fasta'
+        args.output_flanking = True
+        args.context_length = 16
+        args.codon_table = 'Bacterial'
+        cli.call_variant_peptide(args)
+
+        files = {str(file.name) for file in self.work_dir.glob('*')}
+        expected = {
+            'vep_moPepGen.fasta',
+            'vep_moPepGen_peptide_table.txt',
+            'vep_moPepGen_flanking_table.txt'
+        }
+        self.assertEqual(files, expected)
+
+        with open(self.work_dir/'vep_moPepGen_flanking_table.txt', 'rt') as handle:
+            data:dict[str, tuple[str, str]] = {}
+            for line in handle:
+                if line.startswith('#'):
+                    continue
+                fields = line.rstrip('\n').split('\t')
+                seq = fields[0]
+                n_flank = fields[2]
+                c_flank = fields[3]
+                data[seq] = (n_flank, c_flank)
+        self.assertEqual(
+            data['VTAIISALVICIIVSLSWAVNHYR'][0],
+            'MSR'
+        )
+
     def test_call_variant_peptide_archipel(self):
         """ Enzyme None """
         args = create_base_args()
