@@ -498,7 +498,8 @@ class CallVariantOrchestrator:
                             sequence=str(peptide),
                             header=seq_anno.label,
                             n_flank=seq_anno.n_flank,
-                            c_flank=seq_anno.c_flank
+                            c_flank=seq_anno.c_flank,
+                            misc=seq_anno.misc
                         )
         if graph_writer:
             graph_writer.write_dgraphs(result.tx_id, result.dgraphs)

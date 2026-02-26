@@ -25,7 +25,7 @@ class PVGPeptideMetadata():
     def __init__(self, label:str=None, orf:Tuple[int,int]=None,
             is_pure_circ_rna:bool=False, has_variants:bool=False,
             segments:List[PeptideSegment]=None, check_orf:bool=False,
-            n_flank:str='', c_flank:str=''):
+            n_flank:str='', c_flank:str='', misc:int=0):
         """  """
         self.label = label
         self.orf = orf
@@ -35,6 +35,7 @@ class PVGPeptideMetadata():
         self.check_orf = check_orf
         self.n_flank = n_flank
         self.c_flank = c_flank
+        self.misc = int(misc)
 
     def get_key(self) -> str:
         """ get key """
@@ -128,12 +129,13 @@ class PeptideSegment:
 class AnnotatedPeptideLabel:
     """ Annotated peptide label """
     def __init__(self, label:str, segments:List[PeptideSegment],
-            n_flank:str='', c_flank:str=''):
+            n_flank:str='', c_flank:str='', misc:int=0):
         """ constructor """
         self.label = label
         self.segments = segments
         self.n_flank = n_flank
         self.c_flank = c_flank
+        self.misc = int(misc)
 
     def to_lines(self) -> str:
         """ to line """
@@ -233,6 +235,11 @@ class PVGNodePath():
     def number_of_nodes(self) -> int:
         """ len """
         return len(self.nodes)
+
+    def get_misc_count(self) -> int:
+        """Count miscleavages from node boundaries excluding cpop-collapsed nodes."""
+        n_non_cpop = len([x for x in self.nodes if not x.cpop_collapsed])
+        return max(0, n_non_cpop - 1)
 
     def has_any_potential_island_variant(self, node:PVGNode) -> bool:
         """ Checks if the given node has any non global variant """
@@ -825,6 +832,10 @@ class PVGCandidateNodePaths():
         for series in self.data:
             queue = series.nodes
             metadata = PVGPeptideMetadata(check_orf=check_orf)
+            if self.cleavage_params.peptide_finding_mode == constant.PeptideFindingMode.MISC.value:
+                metadata.misc = series.get_misc_count()
+            else:
+                metadata.misc = 0
             seqs_to_join:List[Seq] = []
             size:int = 0
             variants:Dict[str,VariantRecord] = {}
@@ -1724,7 +1735,8 @@ class PVGPeptideFinder():
                     label=label,
                     segments=metadata.segments,
                     n_flank=metadata.n_flank,
-                    c_flank=metadata.c_flank
+                    c_flank=metadata.c_flank,
+                    misc=metadata.misc
                 )
                 if seq in peptide_segments:
                     peptide_segments[seq].append(seq_anno)
