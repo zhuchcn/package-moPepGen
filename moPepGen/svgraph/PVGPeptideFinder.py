@@ -475,8 +475,6 @@ class PVGCandidateNodePaths():
         """Whether a node can contribute to flank context."""
         if node.seq is None:
             return False
-        if str(node.seq.seq) == '*':
-            return False
         if allowed_variants is None:
             allowed_variants = set()
         for variant in node.variants:
