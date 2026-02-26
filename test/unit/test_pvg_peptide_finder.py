@@ -402,6 +402,59 @@ class TestCasePVGCandidateNodePaths(unittest.TestCase):
         c_flank, _ = paths.get_c_flank(nodes[2], 1, set())
         self.assertEqual(c_flank, 'Y')
 
+    def test_get_c_flank_backtracks_to_sibling_when_first_branch_blocks(self):
+        """C flank should backtrack to sibling branch if first branch cannot extend."""
+        tx_id = 'ENST0001'
+        blocked_var = (0, 1, 'A', 'T', 'SNV', 'SNV-A2', 0, 1, True)
+        data = {
+            1: ('X', [0], [None], [((0,1),(0,1))], 0),
+            2: ('A1', [1], [None], [((0,2),(1,3))], 0),
+            3: ('B1B', [1], [None], [((0,3),(3,6))], 0),
+            4: ('Z', [2], [blocked_var], [((0,1),(6,7))], 0),
+            5: ('CC', [3], [None], [((0,2),(7,9))], 0),
+            6: ('*', [4, 5], [None], [((0,1),(9,10))], 0)
+        }
+        graph, nodes = create_pgraph(data, tx_id)
+        cp = params.CleavageParams(enzyme='trypsin')
+        paths = PVGCandidateNodePaths(
+            data=[],
+            cleavage_params=cp,
+            tx_id=tx_id,
+            leading_node=nodes[1],
+            subgraphs=graph.subgraphs,
+            context_length=4,
+            n_flank_cache={},
+            c_flank_cache={}
+        )
+        c_flank, _ = paths.get_c_flank(nodes[1], 1, set())
+        self.assertEqual(c_flank, 'B1BC')
+
+    def test_get_n_flank_backtracks_to_sibling_when_first_branch_blocks(self):
+        """N flank should backtrack to sibling branch if first branch cannot extend."""
+        tx_id = 'ENST0001'
+        blocked_var = (0, 1, 'A', 'T', 'SNV', 'SNV-UP', 0, 1, True)
+        data = {
+            1: ('Z', [0], [blocked_var], [((0,1),(0,1))], 0),
+            2: ('AA', [1], [None], [((0,2),(1,3))], 0),
+            3: ('BBB', [0], [None], [((0,3),(3,6))], 0),
+            4: ('X', [2, 3], [None], [((0,1),(6,7))], 0),
+            5: ('*', [4], [None], [((0,1),(7,8))], 0)
+        }
+        graph, nodes = create_pgraph(data, tx_id)
+        cp = params.CleavageParams(enzyme='trypsin')
+        paths = PVGCandidateNodePaths(
+            data=[],
+            cleavage_params=cp,
+            tx_id=tx_id,
+            leading_node=nodes[4],
+            subgraphs=graph.subgraphs,
+            context_length=3,
+            n_flank_cache={},
+            c_flank_cache={}
+        )
+        n_flank, _ = paths.get_n_flank(nodes[4], 0, set())
+        self.assertEqual(n_flank, 'BBB')
+
     def test_clip_initiator_m_sets_empty_n_flank(self):
         """Clipped initiator M should not appear in N-flank context."""
         tx_id = 'ENST0001'

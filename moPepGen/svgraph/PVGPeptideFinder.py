@@ -487,11 +487,28 @@ class PVGCandidateNodePaths():
     @staticmethod
     def _sorted_nodes(nodes:Iterable[PVGNode]) -> List[PVGNode]:
         """Deterministic ordering for first-match flank search."""
-        return sorted(nodes, key=lambda x: x.id)
+        def _node_sort_key(node:PVGNode):
+            n_variants = len(node.variants) if node.variants is not None else 0
+            if not node.variants:
+                return (n_variants, ())
+            variant_signature = []
+            for v in node.variants:
+                var = v.variant
+                variant_signature.append((
+                    int(var.location.start),
+                    int(var.location.end),
+                    str(var.alt)
+                ))
+            variant_signature.sort()
+            return (
+                n_variants,
+                tuple(variant_signature)
+            )
+        return sorted(nodes, key=_node_sort_key)
 
     def _find_n_flank_recursive(self, node:PVGNode, needed:int,
             allowed_variants:Set[str], visited:Set[str]) -> str:
-        """Find first upstream flank context recursively."""
+        """Find upstream flank context with DFS/backtracking."""
         if needed <= 0:
             return ''
         if node.id in visited:
@@ -505,10 +522,18 @@ class PVGCandidateNodePaths():
             orf_start_node_id = self.current_valid_orf.start_node.id
             orf_start_offset = int(self.current_valid_orf.node_offset or 0)
 
+        best_partial = None
         for in_node in self._sorted_nodes(node.in_nodes):
             if not self.is_flank_eligible(in_node, allowed_variants):
                 continue
             seq = str(in_node.seq.seq)
+            if seq == '*':
+                # Upstream canonical stop contributes no residues.
+                if not in_node.variants:
+                    candidate = ''
+                    if best_partial is None or len(candidate) > len(best_partial):
+                        best_partial = candidate
+                continue
             is_orf_start_node = orf_start_node_id is not None and in_node.id == orf_start_node_id
             if is_orf_start_node:
                 # Do not include residues upstream of the ORF start.
@@ -519,7 +544,10 @@ class PVGCandidateNodePaths():
                 return seq[-needed:]
             if is_orf_start_node:
                 # Cannot traverse further upstream once ORF start node is reached.
-                return seq
+                candidate = seq
+                if best_partial is None or len(candidate) > len(best_partial):
+                    best_partial = candidate
+                continue
             upstream = self._find_n_flank_recursive(
                 node=in_node,
                 needed=needed - len(seq),
@@ -527,13 +555,18 @@ class PVGCandidateNodePaths():
                 visited=visited
             )
             if upstream is not None:
-                return upstream + seq
-            return seq
-        return None
+                candidate = upstream + seq
+                if len(candidate) >= needed:
+                    return candidate[-needed:]
+            else:
+                candidate = seq
+            if best_partial is None or len(candidate) > len(best_partial):
+                best_partial = candidate
+        return best_partial
 
     def _find_c_flank_recursive(self, node:PVGNode, needed:int,
             allowed_variants:Set[str], visited:Set[str]) -> str:
-        """Find first downstream flank context recursively."""
+        """Find downstream flank context with DFS/backtracking."""
         if needed <= 0:
             return ''
         if node.id in visited:
@@ -541,10 +574,31 @@ class PVGCandidateNodePaths():
         visited = set(visited)
         visited.add(node.id)
 
+        best_partial = None
         for out_node in self._sorted_nodes(node.out_nodes):
             if not self.is_flank_eligible(out_node, allowed_variants):
                 continue
             seq = str(out_node.seq.seq)
+            if seq == '*':
+                # Canonical stop terminates this branch and contributes no residues.
+                if not out_node.variants:
+                    candidate = ''
+                    if best_partial is None or len(candidate) > len(best_partial):
+                        best_partial = candidate
+                    continue
+                # Stop gain/lost node can be traversed as 0-aa bridge.
+                downstream = self._find_c_flank_recursive(
+                    node=out_node,
+                    needed=needed,
+                    allowed_variants=allowed_variants,
+                    visited=visited
+                )
+                candidate = downstream if downstream is not None else ''
+                if candidate is not None and len(candidate) >= needed:
+                    return candidate[:needed]
+                if best_partial is None or len(candidate) > len(best_partial):
+                    best_partial = candidate
+                continue
             if len(seq) >= needed:
                 return seq[:needed]
             downstream = self._find_c_flank_recursive(
@@ -554,9 +608,14 @@ class PVGCandidateNodePaths():
                 visited=visited
             )
             if downstream is not None:
-                return seq + downstream
-            return seq
-        return None
+                candidate = seq + downstream
+                if len(candidate) >= needed:
+                    return candidate[:needed]
+            else:
+                candidate = seq
+            if best_partial is None or len(candidate) > len(best_partial):
+                best_partial = candidate
+        return best_partial
 
     def get_n_flank(self, start_node:PVGNode, start_offset:int,
             bg_variants:Set[str]) -> Tuple[str, str]:
@@ -1531,6 +1590,15 @@ class PVGPeptideFinder():
             key = metadata.get_key()
             if key not in val:
                 val[key] = metadata
+            else:
+                # Same peptide key can be reached by multiple equivalent paths.
+                # Keep first metadata, but enrich missing flank context if a
+                # later occurrence provides it.
+                existing = val[key]
+                if not existing.n_flank and metadata.n_flank:
+                    existing.n_flank = metadata.n_flank
+                if not existing.c_flank and metadata.c_flank:
+                    existing.c_flank = metadata.c_flank
             self.seqs.add(seq)
 
     def find_codon_reassignments(self, seq:Seq, w2f:bool=False) -> List[VariantRecord]:
