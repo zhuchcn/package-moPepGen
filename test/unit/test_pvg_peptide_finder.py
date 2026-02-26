@@ -4,8 +4,12 @@ import unittest
 from test.unit import create_variants
 from Bio.Seq import Seq
 from moPepGen import params
-from moPepGen.svgraph.PVGPeptideFinder import PVGCandidateNodePaths, PVGPeptideFinder, \
+from moPepGen.svgraph.PVGPeptideFinder import (
+    PVGCandidateNodePaths,
+    PVGPeptideFinder,
+    PVGNodePath, \
     PVGPeptideMetadata
+)
 from moPepGen.svgraph.PVGOrf import PVGOrf
 import moPepGen.aa.VariantPeptideIdentifier as vpi
 from test.unit import create_pgraph, create_variant
@@ -322,6 +326,21 @@ class TestCasePVGCandidateNodePaths(unittest.TestCase):
         cleavage_params = params.CleavageParams(enzyme='trypsin')
         misc_nodes = PVGCandidateNodePaths([], cleavage_params)
         self.assertFalse(misc_nodes.is_valid_seq('AAAAXAAA', set(), set()))
+
+    def test_node_path_misc_count_excludes_cpop_collapsed(self):
+        """misc count should be number of non-cpop node boundaries."""
+        tx_id = 'ENST0001'
+        data = {
+            1: ('A', [0], [None], [((0,1),(0,1))], 0),
+            2: ('B', [1], [None], [((0,1),(1,2))], 0),
+            3: ('C', [2], [None], [((0,1),(2,3))], 0),
+            4: ('*', [3], [None], [((0,1),(3,4))], 0)
+        }
+        _, nodes = create_pgraph(data, tx_id)
+        path = PVGNodePath(nodes=[nodes[1], nodes[2], nodes[3]], additional_variants=set())
+        self.assertEqual(path.get_misc_count(), 2)
+        nodes[2].cpop_collapsed = True
+        self.assertEqual(path.get_misc_count(), 1)
 
     def test_get_n_flank_uses_leading_node_when_start_node_is_copy(self):
         """N flank should still be found when start node copy has no in_nodes."""

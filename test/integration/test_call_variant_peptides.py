@@ -107,16 +107,17 @@ class TestCallVariantPeptides(TestCaseIntegration):
         flanking_keys = set()
         with open(flanking_table_path, 'rt') as handle:
             header = handle.readline().rstrip('\n')
-            self.assertEqual(header, '#sequence\theader\tn_flank\tc_flank')
+            self.assertEqual(header, '#sequence\theader\tn_flank\tc_flank\tmisc')
             for line in handle:
                 fields = line.rstrip('\n').split('\t')
-                self.assertEqual(len(fields), 4)
-                sequence, header, n_flank, c_flank = fields
+                self.assertEqual(len(fields), 5)
+                sequence, header, n_flank, c_flank, misc = fields
                 flanking_keys.add((sequence, header))
                 self.assertLessEqual(len(n_flank), context_length)
                 self.assertLessEqual(len(c_flank), context_length)
                 self.assertNotIn('*', n_flank)
                 self.assertNotIn('*', c_flank)
+                self.assertGreaterEqual(int(misc), 0)
 
         self.assertEqual(flanking_keys, peptide_keys)
 
@@ -1705,6 +1706,12 @@ class TestCallVariantPeptides(TestCaseIntegration):
         }
         self.assertEqual(files, expected)
         self.assert_flanking_table_consistent(args.output_path, args.context_length)
+        with open(self.work_dir/'sliding_flanking_table.txt', 'rt') as handle:
+            for line in handle:
+                if line.startswith('#'):
+                    continue
+                fields = line.rstrip('\n').split('\t')
+                self.assertEqual(int(fields[4]), 0)
 
     def test_call_variant_peptide_sliding_window_fuzz90(self):
         """ Test case from fuzz test that ensures variant peptides are called

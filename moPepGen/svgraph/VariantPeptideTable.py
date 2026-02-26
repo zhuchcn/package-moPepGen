@@ -60,7 +60,7 @@ VARIANT_PEPTIDE_TABLE_HEADERS = [
 ]
 
 VARIANT_FLANKING_TABLE_HEADERS = [
-    'sequence', 'header', 'n_flank', 'c_flank'
+    'sequence', 'header', 'n_flank', 'c_flank', 'misc'
 ]
 
 
@@ -77,13 +77,13 @@ class VariantPeptideFlankingTable:
         """Write table header."""
         self.handle.write('#' + '\t'.join(VARIANT_FLANKING_TABLE_HEADERS) + '\n')
 
-    def add_peptide(self, sequence:str, header:str, n_flank:str, c_flank:str):
+    def add_peptide(self, sequence:str, header:str, n_flank:str, c_flank:str, misc:int):
         """Write a peptide-level flanking row once."""
         key = (sequence, header)
         if key in self._seen:
             return
         self._seen.add(key)
-        fields = [sequence, header, n_flank, c_flank]
+        fields = [sequence, header, n_flank, c_flank, str(int(misc))]
         self.handle.write('\t'.join(fields) + '\n')
 
 class VariantPeptideTable:
