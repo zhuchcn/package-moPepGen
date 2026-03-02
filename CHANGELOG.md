@@ -15,7 +15,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - Add circRNA ORF ID generation using coordinate-based stop/readthrough mapping and update parser/downstream label consumers (`splitFasta`, `summarizeFasta`, `filterFasta`) to support the new circRNA ORF token format.
 
-### [1.5.1] - 2026-03-02
+## [1.5.1] - 2026-03-02
 
 ### [1.5.1-rc5] - 2026-02-25
 
