@@ -74,6 +74,13 @@ moPepGen splitFasta \
 
 As a result, `split_gSNP.fasta` and `split_gINDEL.fasta` will be written. `split_gSNP-gINDEL.fasta` and `split_gSNP-RNAEditing.fasta` will also be written although the number of variant sources (2) is larger than the value specified through `--max-source-groups`.
 
+### Split mode
+
+`splitFasta` supports two split modes via `--split-mode`:
+
+- `peptide` (default): each peptide sequence is assigned to only one tier, using source priority.
+- `entry`: each FASTA header entry is assigned independently, so one peptide sequence can appear in multiple tier FASTA files if it has multiple entries with different sources.
+
 ## Arguments
 
 {% with actions=get_arg_data(command) %}

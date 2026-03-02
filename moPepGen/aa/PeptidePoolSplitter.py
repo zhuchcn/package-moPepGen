@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from pathlib import Path
 import itertools
+import copy
 from moPepGen.seqvar import GVFMetadata
 from moPepGen import seqvar, circ, constant, VARIANT_PEPTIDE_SOURCE_DELIMITER, \
     SPLIT_DATABASE_KEY_SEPARATER
@@ -153,8 +154,13 @@ class PeptidePoolSplitter():
         return wildcard_map
 
     def split(self, max_groups:int, additional_split:List[Set],
-            tx2gene:Dict[str,str], coding_tx:Set[str]):
+            tx2gene:Dict[str,str], coding_tx:Set[str],
+            split_mode:str='peptide'):
         """ Split peptide pool into separate databases """
+        if split_mode not in {'peptide', 'entry'}:
+            raise ValueError(
+                f"Unsupported split mode: {split_mode}. Use 'peptide' or 'entry'."
+            )
         self.append_order_internal_sources()
         VariantSourceSet.set_levels(self.order)
         delimiter = VARIANT_PEPTIDE_SOURCE_DELIMITER
@@ -170,27 +176,67 @@ class PeptidePoolSplitter():
                 wildcard_map=wildcard_map
             )
             peptide_infos.sort()
-
-            peptide.description = delimiter.join([str(x) for x in peptide_infos])
-            peptide.id = peptide.description
-            peptide.name = peptide.description
-
-            sources = peptide_infos[0].sources
-
-            if len(sources) <= max_groups:
-                database_key = str(sources)
-                self.add_peptide_to_database(database_key, peptide)
+            if split_mode == 'entry':
+                self.add_peptide_to_database_entry_mode(
+                    peptide=peptide,
+                    peptide_infos=peptide_infos,
+                    max_groups=max_groups,
+                    additional_split=additional_split
+                )
             else:
-                has_additional_splitting = False
-                for additional_set in additional_split:
-                    if additional_set.issubset(sources):
-                        database_key = self.get_additional_database_key(additional_set)
-                        self.add_peptide_to_database(database_key, peptide)
-                        has_additional_splitting = True
-                        break
-                if not has_additional_splitting:
-                    database_key = self.get_remaining_database_key()
-                    self.add_peptide_to_database(database_key, peptide)
+                self.add_peptide_to_database_peptide_mode(
+                    peptide=peptide,
+                    peptide_infos=peptide_infos,
+                    delimiter=delimiter,
+                    max_groups=max_groups,
+                    additional_split=additional_split
+                )
+
+    def add_peptide_to_database_peptide_mode(self, peptide:AminoAcidSeqRecord,
+            peptide_infos:List[VariantPeptideInfo], delimiter:str, max_groups:int,
+            additional_split:List[VariantSourceSet]) -> None:
+        """Assign one peptide sequence to exactly one database tier."""
+        peptide.description = delimiter.join([str(x) for x in peptide_infos])
+        peptide.id = peptide.description
+        peptide.name = peptide.description
+
+        database_key = self.get_database_key(
+            sources=peptide_infos[0].sources,
+            max_groups=max_groups,
+            additional_split=additional_split
+        )
+        self.add_peptide_to_database(database_key, peptide)
+
+    def add_peptide_to_database_entry_mode(self, peptide:AminoAcidSeqRecord,
+            peptide_infos:List[VariantPeptideInfo], max_groups:int,
+            additional_split:List[VariantSourceSet]) -> None:
+        """Assign each header entry of a peptide sequence to its own tier."""
+        for peptide_info in peptide_infos:
+            database_key = self.get_database_key(
+                sources=peptide_info.sources,
+                max_groups=max_groups,
+                additional_split=additional_split
+            )
+            entry_peptide = copy.copy(peptide)
+            entry_peptide.description = str(peptide_info)
+            entry_peptide.id = entry_peptide.description
+            entry_peptide.name = entry_peptide.description
+            if database_key not in self.databases:
+                self.databases[database_key] = VariantPeptidePool()
+            # Keep all entry labels for identical peptide sequences.
+            self.databases[database_key].add_peptide(
+                entry_peptide, None, skip_checking=True
+            )
+
+    def get_database_key(self, sources:VariantSourceSet, max_groups:int,
+            additional_split:List[VariantSourceSet]) -> str:
+        """Resolve output database key for a source set."""
+        if len(sources) <= max_groups:
+            return str(sources)
+        for additional_set in additional_split:
+            if additional_set.issubset(sources):
+                return self.get_additional_database_key(additional_set)
+        return self.get_remaining_database_key()
 
     @staticmethod
     def get_additional_database_key(additional:str) -> str:

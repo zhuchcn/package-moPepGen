@@ -674,3 +674,94 @@ class TestPeptidePoolSplitter(unittest.TestCase):
         splitter = PeptidePoolSplitter(peptides=peptides, order=order, label_map=label_map)
         splitter.split(2, [], tx2gene, coding_tx)
         self.assertEqual({'altSplice-NovelORF'}, set(splitter.databases.keys()))
+
+    def test_split_database_entry_mode_splits_shared_headers(self):
+        """Entry mode should split one shared peptide into per-entry tiers."""
+        anno = create_genomic_annotation(ANNOTATION_DATA)
+        anno.transcripts['ENST0005'] = copy.deepcopy(anno.transcripts['ENST0002'])
+        anno.transcripts['ENST0005'].is_protein_coding = False
+        tx2gene, coding_tx = get_tx2gene_and_coding_tx(anno)
+        peptides_data = [[
+            'SSSSSSSR',
+            'ENST0001|SNV-1001-T-A|INDEL-1101-TTTT-T|1 '
+            'ENST0005|ORF-10:100|1 '
+            'ENST0005|ORF-20:110|SNV-2001-T-A|2 '
+            'CIRC-ENST0002-E1-E2|ORF-50:25:1|3'
+        ]]
+        peptides = VariantPeptidePool({create_aa_record(*x) for x in peptides_data})
+        label_map = LabelSourceMapping(copy.copy(LABEL_MAP1))
+        order = {
+            'Variant': 0,
+            'NovelORF': 1,
+            frozenset(['NovelORF', 'Variant']): 2,
+            'circRNA': 3
+        }
+        group_map = {
+            'gSNP': 'Variant',
+            'gINDEL': 'Variant',
+            'sSNV': 'Variant',
+            'sINDEL': 'Variant'
+        }
+        splitter = PeptidePoolSplitter(
+            peptides=peptides,
+            order=order,
+            label_map=label_map,
+            group_map=group_map
+        )
+        splitter.split(2, [], tx2gene, coding_tx, split_mode='entry')
+
+        self.assertEqual(
+            {'Variant', 'NovelORF', 'Variant-NovelORF', 'circRNA'},
+            set(splitter.databases.keys())
+        )
+
+        expected_headers = {
+            'Variant': 'ENST0001|SNV-1001-T-A|INDEL-1101-TTTT-T|1',
+            'NovelORF': 'ENST0005|ORF-10:100|1',
+            'Variant-NovelORF': 'ENST0005|ORF-20:110|SNV-2001-T-A|2',
+            'circRNA': 'CIRC-ENST0002-E1-E2|ORF-50:25:1|3'
+        }
+        for key, header in expected_headers.items():
+            peptide = list(splitter.databases[key].peptides)[0]
+            self.assertEqual(str(peptide.seq), 'SSSSSSSR')
+            self.assertEqual(peptide.description, header)
+
+    def test_split_database_peptide_mode_keeps_single_assignment(self):
+        """Peptide mode should keep one-assignment behavior for shared headers."""
+        anno = create_genomic_annotation(ANNOTATION_DATA)
+        anno.transcripts['ENST0005'] = copy.deepcopy(anno.transcripts['ENST0002'])
+        anno.transcripts['ENST0005'].is_protein_coding = False
+        tx2gene, coding_tx = get_tx2gene_and_coding_tx(anno)
+        peptides_data = [[
+            'SSSSSSSR',
+            'ENST0001|SNV-1001-T-A|INDEL-1101-TTTT-T|1 '
+            'ENST0005|ORF-10:100|1 '
+            'ENST0005|ORF-20:110|SNV-2001-T-A|2 '
+            'CIRC-ENST0002-E1-E2|ORF-50:25:1|3'
+        ]]
+        peptides = VariantPeptidePool({create_aa_record(*x) for x in peptides_data})
+        label_map = LabelSourceMapping(copy.copy(LABEL_MAP1))
+        order = {
+            'Variant': 0,
+            'NovelORF': 1,
+            frozenset(['NovelORF', 'Variant']): 2,
+            'circRNA': 3
+        }
+        group_map = {
+            'gSNP': 'Variant',
+            'gINDEL': 'Variant',
+            'sSNV': 'Variant',
+            'sINDEL': 'Variant'
+        }
+        splitter = PeptidePoolSplitter(
+            peptides=peptides,
+            order=order,
+            label_map=label_map,
+            group_map=group_map
+        )
+        splitter.split(2, [], tx2gene, coding_tx, split_mode='peptide')
+
+        self.assertEqual({'Variant'}, set(splitter.databases.keys()))
+        peptide = list(splitter.databases['Variant'].peptides)[0]
+        self.assertEqual(str(peptide.seq), 'SSSSSSSR')
+        self.assertIn('ENST0001|SNV-1001-T-A|INDEL-1101-TTTT-T|1', peptide.description)

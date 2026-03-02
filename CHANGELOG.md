@@ -20,6 +20,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - Keep parser compatibility for prior non-circ ORF placement while normalizing serialization to the new canonical order; update `splitFasta`/`summarizeFasta` handling and tests accordingly.
 
+- Add `--split-mode` to `splitFasta` with `peptide` (default) and `entry`; `entry` mode splits multi-entry peptide headers across source-specific tiers instead of forcing a single-tier assignment per peptide sequence.
+
 ## [1.5.1] - 2026-03-02
 
 ### [1.5.1-rc5] - 2026-02-25
