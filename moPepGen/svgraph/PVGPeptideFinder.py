@@ -1685,6 +1685,15 @@ class PVGPeptideFinder():
                             val[key] = cur_metadata
                         self.seqs.add(seq_mod)
 
+    @staticmethod
+    def add_orf_to_label(label:str, orf_id:str) -> str:
+        """Insert/replace ORF using typed peptide identifier serialization."""
+        ids = vpi.parse_variant_peptide_id(label, set())
+        if len(ids) != 1:
+            raise ValueError(f"Unexpected multi-entry label: {label}")
+        ids[0].orf_id = orf_id
+        return str(ids[0])
+
     def get_peptide_sequences(self, keep_all_occurrence:bool=True,
             orf_id_map:Dict[Tuple[int,int],str]=None, check_variants:bool=True
             ) -> Dict[Seq,List[AnnotatedPeptideLabel]]:
@@ -1719,7 +1728,7 @@ class PVGPeptideFinder():
 
                 label = metadata.label
                 if orf_id:
-                    label += f"|{orf_id}"
+                    label = self.add_orf_to_label(label=label, orf_id=orf_id)
 
                 if label in unique_labels:
                     continue

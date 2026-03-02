@@ -600,3 +600,35 @@ class TestPeptidePoolSplitter(unittest.TestCase):
         received = {str(x.seq) for x in splitter.databases[key].peptides}
         expected = {x[0] for x in peptides_data}
         self.assertEqual(expected, received)
+
+    def test_split_database_source_comb_order_with_circ_orf_token(self):
+        """ Test split database when circRNA label has ORF-START:STOP:READTHROUGH. """
+        anno = create_genomic_annotation(ANNOTATION_DATA)
+        anno.transcripts['ENST0005'] = copy.deepcopy(anno.transcripts['ENST0002'])
+        anno.transcripts['ENST0005'].is_protein_coding = False
+        tx2gene, coding_tx = get_tx2gene_and_coding_tx(anno)
+        peptides_data = [
+            [
+                'SSSSSSSR',
+                'CIRC-ENST0002-E1-E2|ORF-50:25:1|1 ENST0005|SE-2100|ORF2|1'
+            ]
+        ]
+        peptides = VariantPeptidePool({create_aa_record(*x) for x in peptides_data})
+        label_map = LabelSourceMapping(copy.copy(LABEL_MAP1))
+        order = copy.copy(SOURCE_ORDER)
+        order.update({
+            'NovelORF': 6,
+            frozenset(['altSplice', 'NovelORF']): 7,
+            'circRNA': 8
+        })
+        splitter = PeptidePoolSplitter(
+            peptides=peptides,
+            order=order,
+            label_map=label_map
+        )
+        splitter.split(2, [], tx2gene, coding_tx)
+
+        self.assertEqual({'altSplice-NovelORF'}, set(splitter.databases.keys()))
+        received = {str(x.seq) for x in splitter.databases['altSplice-NovelORF'].peptides}
+        expected = {x[0] for x in peptides_data}
+        self.assertEqual(expected, received)

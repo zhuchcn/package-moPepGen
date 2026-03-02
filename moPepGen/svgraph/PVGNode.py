@@ -958,21 +958,25 @@ class PVGNode():
         """ get the ORF start position at the reference transcript sequence
         given start codon is at the query postion i.
         """
-        k = self.reading_frame_index
+        # k = self.reading_frame_index
         if self.seq.locations:
             for loc in self.seq.locations:
                 if i < loc.query.start:
-                    return loc.ref.start * 3 + k
+                    return loc.ref.start * 3 + loc.ref.start_offset
                 if loc.query.start <= i < loc.query.end:
-                    return (i - loc.query.start + loc.ref.start) * 3 + k
+                    return (i - loc.query.start + loc.ref.start) * 3 + loc.ref.start_offset
 
-        out_node = self.find_least_variant_next()
-        if str(out_node.seq.seq) == '*' and not out_node.out_nodes:
-            return -1
-        if out_node.seq.locations:
-            return out_node.seq.locations[0].ref.start * 3 + k
-        # raise ValueError('Can not find ORF')
-        return -1
+        out_node = self
+        while True:
+            try:
+                out_node = out_node.find_least_variant_next()
+            except IndexError:
+                return -1
+            if str(out_node.seq.seq) == '*' and not out_node.out_nodes:
+                return -1
+            if out_node.seq.locations:
+                ref = out_node.seq.locations[0].ref
+                return ref.start * 3 + ref.start_offset
 
     def get_subgraph_id_set(self) -> Set[str]:
         """ Get all subgraph ID as set """

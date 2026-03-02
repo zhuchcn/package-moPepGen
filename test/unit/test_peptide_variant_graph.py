@@ -3,14 +3,71 @@
 from __future__ import annotations
 from collections import deque
 import unittest
+from Bio.Seq import Seq
+from moPepGen import dna
+from moPepGen.SeqFeature import FeatureLocation, MatchedLocation
 from moPepGen.svgraph.PVGOrf import PVGOrf
 from moPepGen.svgraph.PeptideVariantGraph import PVGTraversal, PVGCursor
 from moPepGen.svgraph.PVGPeptideFinder import PVGPeptideFinder
-from test.unit import create_pgraph
+from test.unit import create_pgraph, create_variant
 
 
 class TestPeptideVariantGraph(unittest.TestCase):
     """ Test case for peptide variant graph """
+    def test_create_orf_id_map_circ_uses_coordinate_notation(self):
+        """circRNA ORF IDs should use ORF-START:STOP:READTHROUGH."""
+        graph, _ = create_pgraph({}, 'CIRC-ENST0001-100:109')
+        graph.global_variant = create_variant(
+            start=0, end=9, ref='T', alt='<circRNA>', _type='circRNA',
+            _id='CIRC-ENST0001-100:109'
+        )
+        graph.orfs = {(106, None)}
+
+        circ_seq = dna.DNASeqRecordWithCoordinates(
+            Seq('TAAAAAACC'),
+            locations=[MatchedLocation(
+                query=FeatureLocation(start=0, end=9),
+                ref=FeatureLocation(start=100, end=109, seqname='ENSG0001')
+            )]
+        )
+        graph.create_orf_id_map(circ_seq=circ_seq, codon_table=1)
+
+        self.assertEqual(
+            graph.orf_id_map[(106, None)],
+            'ORF-106:100:1'
+        )
+
+    def test_create_orf_id_map_noncirc_unchanged(self):
+        """non-circRNA ORF IDs remain ORF1/ORF2 style."""
+        graph, _ = create_pgraph({}, 'ENST0001')
+        graph.orfs = {(9, None), (18, None)}
+        graph.create_orf_id_map()
+        self.assertEqual(graph.orf_id_map[(9, None)], 'ORF1')
+        self.assertEqual(graph.orf_id_map[(18, None)], 'ORF2')
+
+    def test_infer_circ_orf_stop_uses_downstream_same_frame(self):
+        """Stop selection should be nearest downstream stop in same frame."""
+        graph, _ = create_pgraph({}, 'CIRC-ENST0001-100:109')
+        graph.global_variant = create_variant(
+            start=0, end=9, ref='T', alt='<circRNA>', _type='circRNA',
+            _id='CIRC-ENST0001-100:109'
+        )
+        circ_seq = dna.DNASeqRecordWithCoordinates(
+            Seq('TAAAAAACC'),
+            locations=[MatchedLocation(
+                query=FeatureLocation(start=0, end=9),
+                ref=FeatureLocation(start=100, end=109, seqname='ENSG0001')
+            )]
+        )
+        cache = graph.build_circ_stop_codon_cache(circ_seq=circ_seq, codon_table=1)
+        stop, readthrough = graph.infer_circ_orf_stop_and_readthrough(
+            orf_start=103,
+            circ_seq=circ_seq,
+            stop_codon_cache=cache
+        )
+        self.assertEqual(stop, 100)
+        self.assertEqual(readthrough, 1)
+
     def test_find_reference_next(self):
         """ Test that the reference next and prev can be found """
         variant_1 = (0, 3, 'TCT', 'T', 'INDEL', '0:TCT-T', 0, 1, True)
@@ -477,12 +534,15 @@ class TestPeptideVariantGraph(unittest.TestCase):
 
     def test_call_peptides_check_orf(self):
         """ test calling peptides when checking for ORF """
-        locations = [((0,4),(0,4))]
+        loc_upstream_0 = [((0,4),(0,4))]
+        loc_upstream_1 = [((0,4),(1,5))]
+        loc_downstream_0 = [((0,4),(4,8))]
+        loc_downstream_1 = [((0,4),(5,9))]
         data = {
-            1: ('MSSSK', [0], [], locations, 0),
-            2: ('MSSYK', [0], [], locations, 1),
-            3: ('SSSSR', [1], [], locations, 0),
-            4: ('SSSSR', [2], [], locations, 1)
+            1: ('MSSSK', [0], [], loc_upstream_0, 0),
+            2: ('MSSYK', [0], [], loc_upstream_1, 1),
+            3: ('SSSSR', [1], [], loc_downstream_0, 0),
+            4: ('SSSSR', [2], [], loc_downstream_1, 1)
         }
         graph_id = 'ENST0001'
         graph, nodes = create_pgraph(data, graph_id, )

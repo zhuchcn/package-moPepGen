@@ -76,6 +76,32 @@ class TestCasePVGPeptideFinder(unittest.TestCase):
         self.assertEqual({str(x) for x in seqs}, {'SSSSSSSSSR'})
         self.assertEqual(list(seqs.values())[0][0].label, 'CIRC-ENST0001-E1-E2-E3|1')
 
+    def test_get_peptide_sequences_circ_rna_orf_order(self):
+        """circRNA ORF must be before variant IDs in final FASTA label."""
+        tx_id = 'ENST0001'
+        data = [
+            (
+                'SSSSSSSSSR', [
+                    (
+                        [
+                            (100, 101, 'A', '<circRNA>', 'circRNA', 'CIRC-ENST0001-E1-E2-E3'),
+                            (200, 201, 'G', 'C', 'SNV', 'SNV-200-G-C')
+                        ],
+                        (0, None)
+                    )
+                ]
+            )
+        ]
+        finder = create_pvg_peptide_finder(tx_id, data)
+        seqs = finder.get_peptide_sequences(
+            orf_id_map={(0, None): 'ORF-10:5:1'}
+        )
+        self.assertEqual({str(x) for x in seqs}, {'SSSSSSSSSR'})
+        self.assertEqual(
+            list(seqs.values())[0][0].label,
+            'CIRC-ENST0001-E1-E2-E3|ORF-10:5:1|SNV-200-G-C|1'
+        )
+
     def test_find_candidate_node_paths_archipel_1(self):
         """ Find candidate node path for archipel peptides """
         gene_id = 'ENSG0001'

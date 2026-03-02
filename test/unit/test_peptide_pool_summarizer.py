@@ -79,3 +79,37 @@ class TestPeptidePoolSummarizer(unittest.TestCase):
         handle = io.StringIO()
         with redirect_stdout(handle):
             summarizer.write_summary_table(handle)
+
+    def test_summarize_fasta_source_comb_order_with_circ_orf_token(self):
+        """ Summarize with circRNA label containing ORF-START:STOP:READTHROUGH. """
+        anno = create_genomic_annotation(ANNOTATION_DATA)
+        anno.transcripts['ENST0005'] = copy.deepcopy(anno.transcripts['ENST0002'])
+        anno.transcripts['ENST0005'].is_protein_coding = False
+        tx2gene, coding_tx = get_tx2gene_and_coding_tx(anno)
+        peptides_data = [
+            [
+                'SSSSSSSR',
+                'CIRC-ENST0002-E1-E2|ORF-50:25:1|1 ENST0005|SE-2100|ORF2|1'
+            ]
+        ]
+        peptides = VariantPeptidePool({create_aa_record(*x) for x in peptides_data})
+        label_map = LabelSourceMapping(copy.copy(LABEL_MAP1))
+        order = {
+            'altSplice': 1,
+            frozenset(['altSplice', 'NovelORF']): 2,
+            'NovelORF': 3,
+            'circRNA': 4
+        }
+        source_parser_map = copy.deepcopy(SOURCE_PARSER_MAP)
+        summarizer = PeptidePoolSummarizer(
+            peptides, order=order, label_map=label_map, source_parser_map=source_parser_map
+        )
+        summarizer.count_peptide_source(
+            tx2gene=tx2gene,
+            coding_tx=coding_tx,
+            enzyme='trypsin'
+        )
+        self.assertEqual(
+            set(summarizer.summary_table.data.keys()),
+            {frozenset(['altSplice', 'NovelORF'])}
+        )
