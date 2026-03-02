@@ -279,7 +279,7 @@ class TestVariantPeptideInfo(unittest.TestCase):
         label_map_data = {'ENSG0001': {'SNV-1157-G-A': 'sSNV'}}
         label_map = LabelSourceMapping(label_map_data)
 
-        peptide = create_aa_record('KHIRJ','ENST0004|ENSG0004|ORF1|1')
+        peptide = create_aa_record('KHIRJ','ENST0004|ORF1|ENSG0004|1')
         infos = VariantPeptideInfo.from_variant_peptide(peptide, tx2gene, coding_tx, label_map)
         self.assertIn('NovelORF', infos[0].sources)
 
@@ -543,7 +543,7 @@ class TestPeptidePoolSplitter(unittest.TestCase):
         peptides_data = [
             [
                 'SSSSSSSR',
-                'CIRC-ENST0002-E1-E2|1 ENST0005|SE-2100|ORF2|1'
+                'CIRC-ENST0002-E1-E2|1 ENST0005|ORF2|SE-2100|1'
             ]
         ]
         peptides = VariantPeptidePool({create_aa_record(*x) for x in peptides_data})
@@ -576,7 +576,7 @@ class TestPeptidePoolSplitter(unittest.TestCase):
         peptides_data = [
             [
                 'SSSSFSSR',
-                'CIRC-ENST0002-E1-E2|1 ENST0005|SE-2100|W2F-5|ORF-2|1'
+                'CIRC-ENST0002-E1-E2|1 ENST0005|ORF-2|SE-2100|W2F-5|1'
             ]
         ]
         peptides = VariantPeptidePool({create_aa_record(*x) for x in peptides_data})
@@ -610,7 +610,7 @@ class TestPeptidePoolSplitter(unittest.TestCase):
         peptides_data = [
             [
                 'SSSSSSSR',
-                'CIRC-ENST0002-E1-E2|ORF-50:25:1|1 ENST0005|SE-2100|ORF2|1'
+                'CIRC-ENST0002-E1-E2|ORF-50:25:1|1 ENST0005|ORF2|SE-2100|1'
             ]
         ]
         peptides = VariantPeptidePool({create_aa_record(*x) for x in peptides_data})
@@ -632,3 +632,45 @@ class TestPeptidePoolSplitter(unittest.TestCase):
         received = {str(x.seq) for x in splitter.databases['altSplice-NovelORF'].peptides}
         expected = {x[0] for x in peptides_data}
         self.assertEqual(expected, received)
+
+    def test_split_database_novel_orf_coordinate_header(self):
+        """Test split with novelORF header tx|gene|ORF-start:end|variant|index."""
+        anno = create_genomic_annotation(ANNOTATION_DATA)
+        tx2gene, coding_tx = get_tx2gene_and_coding_tx(anno)
+        peptides_data = [
+            ['SSSSSSSR', 'ENST0001|ENSG0001|ORF-12:80|SNV-1001-T-A|1']
+        ]
+        peptides = VariantPeptidePool({create_aa_record(*x) for x in peptides_data})
+        label_map = LabelSourceMapping(copy.copy(LABEL_MAP1))
+        splitter = PeptidePoolSplitter(
+            peptides=peptides,
+            order=copy.copy(SOURCE_ORDER),
+            label_map=label_map
+        )
+        splitter.split(2, [], tx2gene, coding_tx)
+        self.assertEqual({'gSNP-NovelORF'}, set(splitter.databases.keys()))
+        received = {str(x.seq) for x in splitter.databases['gSNP-NovelORF'].peptides}
+        expected = {x[0] for x in peptides_data}
+        self.assertEqual(expected, received)
+
+    def test_split_database_mixed_label_with_new_novel_orf_header(self):
+        """Test mixed-entry label parsing remains correct with new novelORF order."""
+        anno = create_genomic_annotation(ANNOTATION_DATA)
+        anno.transcripts['ENST0005'] = copy.deepcopy(anno.transcripts['ENST0002'])
+        anno.transcripts['ENST0005'].is_protein_coding = False
+        tx2gene, coding_tx = get_tx2gene_and_coding_tx(anno)
+        peptides_data = [[
+            'SSSSSSSR',
+            'CIRC-ENST0002-E1-E2|ORF-50:25:1|1 ENST0005|ENSG0002|ORF-12:80|SE-2100|1'
+        ]]
+        peptides = VariantPeptidePool({create_aa_record(*x) for x in peptides_data})
+        label_map = LabelSourceMapping(copy.copy(LABEL_MAP1))
+        order = {
+            'altSplice': 1,
+            frozenset(['altSplice', 'NovelORF']): 2,
+            'NovelORF': 3,
+            'circRNA': 4
+        }
+        splitter = PeptidePoolSplitter(peptides=peptides, order=order, label_map=label_map)
+        splitter.split(2, [], tx2gene, coding_tx)
+        self.assertEqual({'altSplice-NovelORF'}, set(splitter.databases.keys()))

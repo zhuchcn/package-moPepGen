@@ -15,6 +15,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - Add circRNA ORF ID generation using coordinate-based stop/readthrough mapping and update parser/downstream label consumers (`splitFasta`, `summarizeFasta`, `filterFasta`) to support the new circRNA ORF token format.
 
+- Update novel-ORF-assigned non-circ variant peptide headers to use coordinate-style ORF IDs (`ORF-START:END`) and canonical field order:
+  `transcript|[gene]|ORF|variants|index`.
+
+- Keep parser compatibility for prior non-circ ORF placement while normalizing serialization to the new canonical order; update `splitFasta`/`summarizeFasta` handling and tests accordingly.
+
 ### [1.5.1-rc5] - 2026-02-25
 
 - Add optional variant peptide flanking context output in `callVariant` via `--output-flanking` and `--context-length`; write per-peptide N/C context to `<output>_flanking_table.txt`.

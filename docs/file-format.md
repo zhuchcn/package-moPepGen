@@ -209,7 +209,7 @@ circRNAs IDs follow the format CIRC-\<transcript_id>-<upstrea>:<downstream>, whe
 
 ## 2 Variant Peptide FASTA
 
-In moPepGen, the headers of the final output variant peptide FASTA contain the transcript IDs and variants associated with this variant peptide. The header of a peptide record starts with the transcript backbone ID and is followed by the variant IDs that it is associated with, separated by '|'. The variant IDs are defined in the GVF files. An ORF ID is added if the peptide is found from a novel ORF of the transcript. In some cases, several non-canonical peptides from the same transcript may share the same variants. This is most common in cases of peptide miscleavages. In addition, a frameshifting variant may cause multiple non-canonical peptides. An integer index is thus always added to the end of each header entry to resolve redundancies.
+In moPepGen, the headers of the final output variant peptide FASTA contain the transcript IDs and variants associated with this variant peptide. The header of a peptide record starts with the transcript backbone ID and is followed by the variant IDs that it is associated with, separated by '|'. The variant IDs are defined in the GVF files. An ORF ID is added only when the peptide is assigned to a novel ORF (not for canonical ORF peptides from coding transcripts). In some cases, several non-canonical peptides from the same transcript may share the same variants. This is most common in cases of peptide miscleavages. In addition, a frameshifting variant may cause multiple non-canonical peptides. An integer index is thus always added to the end of each header entry to resolve redundancies.
 
 If the same peptide is found in multiple transcripts, all are documented as separate entries in the fasta header, separated by space.
 
@@ -240,5 +240,22 @@ For circRNA, the FASTA headers follow this style:
 >CIRC-ENSG0001-15:68|ORF-50:25:1|1
 XXXXXXXXXXXXX
 >CIRC-ENSG0001-153:285|ORF-225:187:2|SNV-110-C-A|2
+XXXXXXXXXXXXX
+```
+
+For non-circ novel ORF peptides, the FASTA headers follow this style:
+`<transcript-ID>|[<gene-ID>|]<ORF-ID>|<variant_id_1>|...|<variant_id_k>|<index>`
+
+`<ORF-ID>` uses this notation:
+`ORF-<START>:<END>`
+
+- `START`: ORF start coordinate in transcript coordinate space.
+- `END`: ORF end/stop coordinate in transcript coordinate space.
+
+Examples:
+```
+>ENST0001|ENSG0001|ORF-12:80|SNV-100-C-A|1
+XXXXXXXXXXXXX
+>ENST0004|ORF-45:132|SE-2100|2
 XXXXXXXXXXXXX
 ```

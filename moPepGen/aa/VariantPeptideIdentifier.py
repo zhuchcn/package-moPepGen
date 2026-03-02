@@ -79,8 +79,9 @@ def parse_variant_peptide_id(label:str, coding_txs:Set[str]) -> List[VariantPept
     # FASTA header examples:
     # ENST0001|SNV-50-A-T|1
     # ENST0001|SNV-50-A-T|INDEL-55-CC-C|2
-    # ENST0001|SNV-50-A-T|ORF2|1
-    # FASTA headers have 5 fields below separate by | :
+    # ENST0001|ORF-12:80|SNV-50-A-T|1
+    # ENST0001|ENSG0001|ORF-12:80|1
+    # FASTA headers have 5 logical fields separated by | :
     # - (Required) Transcript backbone ID (tx ID, fusion ID, or circRNA ID)
     # - (Optioanl) Gene ID, required for novel ORF peptides without additional variants.
     # - (Optional) Variant IDs separated by |
@@ -161,8 +162,14 @@ def parse_variant_peptide_id(label:str, coding_txs:Set[str]) -> List[VariantPept
             # have at least one variant.
             if not var_ids and orf_id is not None:
                 backbone_id = fields[0]
-                if len(fields) > 1:
-                    gene_id = fields[1]
+                for field in fields[1:]:
+                    if field == orf_id:
+                        continue
+                    if any(field.startswith(str(t))
+                            for t in VariantPrefix.alt_translation()):
+                        continue
+                    gene_id = field
+                    break
                 IdentifierType = _set_identifier_type(
                     IdentifierType,
                     NovelORFPeptideIdentifier
@@ -238,9 +245,9 @@ class BaseVariantPeptideIdentifier(VariantPeptideIdentifier):
         x = [self.transcript_id]
         if self.gene_id:
             x.append(self.gene_id)
-        x += self.variant_ids
         if self.orf_id:
             x.append(self.orf_id)
+        x += self.variant_ids
         if self.index:
             x.append(str(self.index))
         return '|'.join(x)
@@ -323,9 +330,9 @@ class NovelORFPeptideIdentifier(VariantPeptideIdentifier):
         fields = [self.transcript_id]
         if self.gene_id:
             fields.append(self.gene_id)
-        fields += self.codon_reassigns
         if self.orf_id:
             fields.append(self.orf_id)
+        fields += self.codon_reassigns
         if self.index:
             fields.append(str(self.index))
         return '|'.join(fields)
