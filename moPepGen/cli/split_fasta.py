@@ -64,6 +64,16 @@ def add_subparser_split_fasta(subparser:argparse._SubParsersAction):
         metavar = '<value>'
     )
     p.add_argument(
+        '--split-mode',
+        type=str,
+        choices=['peptide', 'entry'],
+        default='peptide',
+        help='How to split peptide records. "peptide" keeps current behavior'
+        ' (one assignment per peptide sequence). "entry" splits by individual'
+        ' FASTA header entry.',
+        metavar='<value>'
+    )
+    p.add_argument(
         '--order-source',
         type=str,
         help='Order of sources, separate by comma (e.g., SNP,SNV,Fusion). Whildcard'
@@ -204,7 +214,8 @@ def split_fasta(args:argparse.Namespace) -> None:
         max_groups=args.max_source_groups,
         additional_split=additional_split,
         tx2gene=tx2gene,
-        coding_tx=coding_tx
+        coding_tx=coding_tx,
+        split_mode=getattr(args, 'split_mode', 'peptide')
     )
 
     logger.info('Database split finished')

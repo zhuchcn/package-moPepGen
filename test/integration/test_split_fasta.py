@@ -35,6 +35,7 @@ class TestSplitDatabase(TestCaseIntegration):
         """ Create base args """
         args = argparse.Namespace()
         args.command = 'splitFasta'
+        args.split_mode = 'peptide'
         args.novel_orf_peptides = None
         args.order_source = None
         args.group_source = None
@@ -226,6 +227,41 @@ class TestSplitDatabase(TestCaseIntegration):
         expected = {
             'test_NovelORF.fasta', 'test_SECT.fasta',
             'test_Remaining.fasta', 'test_CodonReassign.fasta'
+        }
+        self.assertEqual(files, expected)
+
+    def test_split_fasta_entry_mode_splits_shared_headers(self):
+        """split-mode entry should route each header entry to its own tier."""
+        args = self.create_base_args()
+        args.gvf = [
+            self.data_dir/'reditools/reditools.gvf',
+            self.data_dir/'circRNA/circ_rna.gvf'
+        ]
+        args.variant_peptides = self.work_dir/'entry_mode_input.fasta'
+        args.novel_orf_peptides = None
+        args.alt_translation_peptides = None
+        args.annotation_gtf = self.data_dir/'annotation.gtf'
+        args.proteome_fasta = self.data_dir/'translate.fasta'
+        args.split_mode = 'entry'
+        args.max_source_groups = 2
+        args.order_source = 'RNAEditingSite,NovelORF,NovelORF-CodonReassign,circRNA'
+        record = (
+            '>ENST00000614167.2|RES-101-A-G|1 '
+            'ENST00000624155.2|ORF-24:141|1 '
+            'ENST00000624155.2|ORF-24:141|W2F-11|1 '
+            'CIRC-ENST00000614167.2-0:464|ORF-209:5:1|1\n'
+            'PEPTIDE\n'
+        )
+        args.variant_peptides.write_text(record)
+
+        cli.split_fasta(args)
+        files = {str(file.name) for file in self.work_dir.glob('*')}
+        expected = {
+            'test_RNAEditingSite.fasta',
+            'test_NovelORF.fasta',
+            'test_NovelORF-CodonReassign.fasta',
+            'test_circRNA.fasta',
+            'entry_mode_input.fasta'
         }
         self.assertEqual(files, expected)
 
