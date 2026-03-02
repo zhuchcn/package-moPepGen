@@ -235,6 +235,7 @@ For circRNA, the FASTA headers follow this style:
 - `START`: ORF start coordinate in the same coordinate system used by the circRNA ID/backsplicing site.
 - `STOP`: ORF stop codon coordinate in the same coordinate system.
 - `READTHROUGH`: Number of passes across the backsplicing junction from larger to smaller coordinate.
+- Special case: when no in-frame stop codon is found within the circRNA stop search window, moPepGen reports `START == STOP` and sets `READTHROUGH` to `3` as a sentinel value.
 
 ```
 >CIRC-ENSG0001-15:68|ORF-50:25:1|1
