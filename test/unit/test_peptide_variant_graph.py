@@ -37,13 +37,24 @@ class TestPeptideVariantGraph(unittest.TestCase):
             'ORF-106:100:1'
         )
 
-    def test_create_orf_id_map_noncirc_unchanged(self):
-        """non-circRNA ORF IDs remain ORF1/ORF2 style."""
+    def test_create_orf_id_map_noncirc_uses_start_end_notation(self):
+        """non-circRNA ORF IDs should use ORF-START:END when tx_seq is given."""
         graph, _ = create_pgraph({}, 'ENST0001')
-        graph.orfs = {(9, None), (18, None)}
-        graph.create_orf_id_map()
-        self.assertEqual(graph.orf_id_map[(9, None)], 'ORF1')
-        self.assertEqual(graph.orf_id_map[(18, None)], 'ORF2')
+        graph.orfs = {(0, None), (6, None)}
+        tx_seq = dna.DNASeqRecordWithCoordinates(Seq('ATGAAATAGATGTAA'))
+        graph.create_orf_id_map(tx_seq=tx_seq, codon_table=1)
+        self.assertEqual(graph.orf_id_map[(0, None)], 'ORF-0:6')
+        self.assertEqual(graph.orf_id_map[(6, None)], 'ORF-6:6')
+
+    def test_create_orf_id_map_noncirc_fallback_to_last_inframe_codon(self):
+        """When no downstream stop exists, fallback to last in-frame codon start."""
+        graph, _ = create_pgraph({}, 'ENST0001')
+        graph.orfs = {(0, None), (1, None), (2, None)}
+        tx_seq = dna.DNASeqRecordWithCoordinates(Seq('ATGAAAACC'))
+        graph.create_orf_id_map(tx_seq=tx_seq, codon_table=1)
+        self.assertEqual(graph.orf_id_map[(0, None)], 'ORF-0:6')
+        self.assertEqual(graph.orf_id_map[(1, None)], 'ORF-1:1')
+        self.assertEqual(graph.orf_id_map[(2, None)], 'ORF-2:5')
 
     def test_infer_circ_orf_stop_uses_downstream_same_frame(self):
         """Stop selection should be nearest downstream stop in same frame."""
@@ -67,6 +78,29 @@ class TestPeptideVariantGraph(unittest.TestCase):
         )
         self.assertEqual(stop, 100)
         self.assertEqual(readthrough, 1)
+
+    def test_infer_circ_orf_stop_no_stop_uses_readthrough_sentinel(self):
+        """When no in-frame stop is found, readthrough should be sentinel 3."""
+        graph, _ = create_pgraph({}, 'CIRC-ENST0001-100:109')
+        graph.global_variant = create_variant(
+            start=0, end=9, ref='A', alt='<circRNA>', _type='circRNA',
+            _id='CIRC-ENST0001-100:109'
+        )
+        circ_seq = dna.DNASeqRecordWithCoordinates(
+            Seq('AAAAAAAAA'),
+            locations=[MatchedLocation(
+                query=FeatureLocation(start=0, end=9),
+                ref=FeatureLocation(start=100, end=109, seqname='ENSG0001')
+            )]
+        )
+        cache = graph.build_circ_stop_codon_cache(circ_seq=circ_seq, codon_table=1)
+        stop, readthrough = graph.infer_circ_orf_stop_and_readthrough(
+            orf_start=103,
+            circ_seq=circ_seq,
+            stop_codon_cache=cache
+        )
+        self.assertEqual(stop, 103)
+        self.assertEqual(readthrough, 3)
 
     def test_find_reference_next(self):
         """ Test that the reference next and prev can be found """

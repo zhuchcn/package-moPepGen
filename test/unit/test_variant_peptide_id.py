@@ -238,3 +238,34 @@ class TestVaraintPeptideIdentifier(unittest.TestCase):
         self.assertEqual(peptide_ids[0].transcript_id, 'ENST0001')
         self.assertEqual(peptide_ids[0].orf_id, 'ORF1')
         self.assertEqual(str(peptide_ids[0]), label)
+
+    def test_parse_variant_id_base_with_orf_and_variant(self):
+        """ parse base variant id where ORF token is before variants """
+        coding_txs = {}
+        label = 'ENST0001|ORF-12:80|SNV-101-A-T|1'
+        peptide_ids = aa.parse_variant_peptide_id(label, coding_txs)
+        self.assertEqual(len(peptide_ids), 1)
+        self.assertIsInstance(peptide_ids[0], pi.BaseVariantPeptideIdentifier)
+        peptide_ids:List[pi.BaseVariantPeptideIdentifier]
+        self.assertEqual(peptide_ids[0].transcript_id, 'ENST0001')
+        self.assertEqual(peptide_ids[0].orf_id, 'ORF-12:80')
+        self.assertEqual(peptide_ids[0].variant_ids, ['SNV-101-A-T'])
+        self.assertEqual(str(peptide_ids[0]), label)
+
+    def test_parse_variant_id_base_old_orf_order_roundtrip_to_canonical(self):
+        """ parse old order and serialize to canonical ORF-before-variant order """
+        coding_txs = {}
+        old_label = 'ENST0001|SNV-101-A-T|ORF-12:80|1'
+        peptide_ids = aa.parse_variant_peptide_id(old_label, coding_txs)
+        self.assertEqual(len(peptide_ids), 1)
+        self.assertIsInstance(peptide_ids[0], pi.BaseVariantPeptideIdentifier)
+        self.assertEqual(str(peptide_ids[0]), 'ENST0001|ORF-12:80|SNV-101-A-T|1')
+
+    def test_parse_variant_id_novel_orf_alt_order_roundtrip_to_canonical(self):
+        """ parse tx|ORF|gene and serialize to tx|gene|ORF """
+        coding_txs = {}
+        old_label = 'ENST0001|ORF-12:80|ENSG0001|1'
+        peptide_ids = aa.parse_variant_peptide_id(old_label, coding_txs)
+        self.assertEqual(len(peptide_ids), 1)
+        self.assertIsInstance(peptide_ids[0], pi.NovelORFPeptideIdentifier)
+        self.assertEqual(str(peptide_ids[0]), 'ENST0001|ENSG0001|ORF-12:80|1')

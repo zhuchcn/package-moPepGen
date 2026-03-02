@@ -928,11 +928,11 @@ class PeptideVariantGraph():
         frame = start_query % 3
         stop_positions = stop_codon_cache.get(frame, [])
         if not stop_positions:
-            return orf_start, 0
+            return orf_start, 3
 
         i = bisect_left(stop_positions, start_query)
         if i >= len(stop_positions):
-            return orf_start, 0
+            return orf_start, 3
 
         stop_ext = stop_positions[i]
         start_pass = start_query // seq_len
@@ -942,9 +942,90 @@ class PeptideVariantGraph():
         stop_gene = self.query_index_to_gene_coordinate(circ_seq, stop_query)
         return stop_gene, readthrough
 
+    @staticmethod
+    def build_linear_stop_codon_cache(tx_seq:DNASeqRecordWithCoordinates,
+            codon_table:Any) -> Dict[int, List[int]]:
+        """Cache stop-codon starts by reading frame for a linear transcript."""
+        seq = str(tx_seq.seq).upper()
+        seq_len = len(seq)
+        cache:Dict[int, List[int]] = {0: [], 1: [], 2: []}
+        if seq_len < 3:
+            return cache
+
+        for frame in (0, 1, 2):
+            frame_len = seq_len - frame
+            if frame_len < 3:
+                continue
+            trim_len = frame_len - (frame_len % 3)
+            translated = str(Seq(seq[frame:frame + trim_len]).translate(
+                table=codon_table,
+                to_stop=False
+            ))
+            for aa_idx, aa_char in enumerate(translated):
+                if aa_char == '*':
+                    cache[frame].append(frame + aa_idx * 3)
+        return cache
+
+    @staticmethod
+    def infer_linear_orf_stop(orf_start:int, tx_seq:DNASeqRecordWithCoordinates,
+            stop_codon_cache:Dict[int, List[int]]) -> int:
+        """Infer nearest downstream stop-codon start for a linear transcript ORF.
+
+        Returns transcript coordinate of stop codon start. If no in-frame stop
+        codon exists downstream, returns the last codon start in the same frame.
+        """
+        seq_len = len(tx_seq.seq)
+        if orf_start is None or orf_start < 0 or orf_start >= seq_len:
+            return orf_start
+        if seq_len < 3:
+            return orf_start
+
+        start = int(orf_start)
+        frame = start % 3
+        stop_positions = stop_codon_cache.get(frame, [])
+        if not stop_positions:
+            max_codon_start = seq_len - 3
+            if max_codon_start < start:
+                return orf_start
+            return max_codon_start - ((max_codon_start - frame) % 3)
+
+        i = bisect_left(stop_positions, start)
+        if i < len(stop_positions):
+            return stop_positions[i]
+        max_codon_start = seq_len - 3
+        if max_codon_start < start:
+            return orf_start
+        return max_codon_start - ((max_codon_start - frame) % 3)
+
     def create_orf_id_map(self, circ_seq:DNASeqRecordWithCoordinates=None,
-            codon_table:Any=None) -> None:
-        """Creates ORF IDs. For circRNA, use ORF-START:STOP:READTHROUGH."""
+            codon_table:Any=None, tx_seq:DNASeqRecordWithCoordinates=None) -> None:
+        """Create ORF identifier strings for all ORFs in ``self.orfs``.
+
+        Behavior and ID formats:
+        * If the graph represents a circRNA (``self.is_circ_rna()`` is true)
+          and both ``circ_seq`` and ``codon_table`` are provided, ORF IDs have
+          the form ``ORF-START:STOP:READTHROUGH``. ``START`` and ``STOP`` are
+          transcript coordinates on the circular transcript, and
+          ``READTHROUGH`` is the number of full circular passes from start to
+          the selected in-frame stop codon.
+        * Otherwise, if a linear transcript sequence (``tx_seq``) and
+          ``codon_table`` are provided, ORF IDs have the form
+          ``ORF-START:END``. ``START`` is the ORF start coordinate, and
+          ``END`` is the in-frame stop-codon start coordinate inferred from
+          ``tx_seq`` (or taken from ``self.orfs`` if an explicit stop is
+          provided).
+        * If neither of the above cases applies, ORFs are assigned simple
+          sequential IDs: ``ORF1``, ``ORF2``, ...
+
+        Precedence:
+        * CircRNA-specific IDs (``ORF-START:STOP:READTHROUGH``) are generated
+          whenever ``self.is_circ_rna()`` is true and both ``circ_seq`` and
+          ``codon_table`` are supplied.
+        * Linear transcript IDs (``ORF-START:END``) are used only when the
+          circRNA branch is not taken but ``tx_seq`` and ``codon_table`` are
+          available.
+        * Otherwise, the fallback sequential IDs are used.
+        """
         orfs = list(self.orfs)
         orfs.sort()
         if self.is_circ_rna() and circ_seq is not None and codon_table is not None:
@@ -963,6 +1044,24 @@ class PeptideVariantGraph():
                 )
                 self.orf_id_map[orf] = f"ORF-{orf_start}:{orf_stop}:{readthrough}"
             return
+        if tx_seq is not None and codon_table is not None:
+            self.orf_id_map = {}
+            stop_codon_cache = self.build_linear_stop_codon_cache(
+                tx_seq=tx_seq,
+                codon_table=codon_table
+            )
+            for orf in orfs:
+                orf_start = int(orf[0])
+                if len(orf) > 1 and orf[1] is not None:
+                    orf_stop = int(orf[1])
+                else:
+                    orf_stop = self.infer_linear_orf_stop(
+                        orf_start=orf_start,
+                        tx_seq=tx_seq,
+                        stop_codon_cache=stop_codon_cache
+                    )
+                self.orf_id_map[orf] = f"ORF-{orf_start}:{orf_stop}"
+            return
         self.orf_id_map = {v:f"ORF{i+1}" for i,v in enumerate(orfs)}
 
     def call_variant_peptides(self, check_variants:bool=True, mode:str='misc',
@@ -971,7 +1070,8 @@ class PeptideVariantGraph():
             backsplicing_only:bool=False, truncate_sec:bool=False, w2f:bool=False,
             check_external_variants:bool=True, find_ass:bool=False,
             force_init_met:bool=True, context_length:int=0,
-            circ_seq:DNASeqRecordWithCoordinates=None, codon_table:Any=None
+            circ_seq:DNASeqRecordWithCoordinates=None, codon_table:Any=None,
+            tx_seq:DNASeqRecordWithCoordinates=None
             ) -> Dict[Seq, List[AnnotatedPeptideLabel]]:
         """ Walk through the graph and find all noncanonical peptides.
 
@@ -1066,7 +1166,11 @@ class PeptideVariantGraph():
                 )
 
         if check_orf:
-            self.create_orf_id_map(circ_seq=circ_seq, codon_table=codon_table)
+            self.create_orf_id_map(
+                circ_seq=circ_seq,
+                codon_table=codon_table,
+                tx_seq=tx_seq
+            )
 
         finder.translational_modification(w2f, self.denylist)
 

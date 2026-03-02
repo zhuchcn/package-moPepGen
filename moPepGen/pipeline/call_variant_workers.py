@@ -190,7 +190,9 @@ def call_peptide_main(tx_id: str, tx_variants: List['seqvar.VariantRecord'],
             w2f=w2f,
             check_external_variants=True,
             check_orf=True,
-            context_length=context_length
+            context_length=context_length,
+            tx_seq=tx_seq,
+            codon_table=codon_table.codon_table
         )
         for peptide, labels in peptide_novel_orf.items():
             if peptide not in peptide_map:
@@ -316,7 +318,9 @@ def call_peptide_fusion(variant: 'seqvar.VariantRecord',
             w2f=w2f_reassignment,
             check_external_variants=True,
             check_orf=True,
-            context_length=context_length
+            context_length=context_length,
+            tx_seq=tx_seq,
+            codon_table=codon_table.codon_table
         )
         for peptide, labels in peptide_novel_orf.items():
             if peptide not in peptide_map:

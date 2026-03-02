@@ -50,7 +50,7 @@ class TestPeptidePoolSummarizer(unittest.TestCase):
         peptides_data = [
             [
                 'SSSSSSSR',
-                'CIRC-ENST0002-E1-E2|1 ENST0005|SE-2100|ORF2|1'
+                'CIRC-ENST0002-E1-E2|1 ENST0005|ORF2|SE-2100|1'
             ]
         ]
         peptides = VariantPeptidePool({create_aa_record(*x) for x in peptides_data})
@@ -89,7 +89,7 @@ class TestPeptidePoolSummarizer(unittest.TestCase):
         peptides_data = [
             [
                 'SSSSSSSR',
-                'CIRC-ENST0002-E1-E2|ORF-50:25:1|1 ENST0005|SE-2100|ORF2|1'
+                'CIRC-ENST0002-E1-E2|ORF-50:25:1|1 ENST0005|ORF2|SE-2100|1'
             ]
         ]
         peptides = VariantPeptidePool({create_aa_record(*x) for x in peptides_data})
@@ -112,4 +112,29 @@ class TestPeptidePoolSummarizer(unittest.TestCase):
         self.assertEqual(
             set(summarizer.summary_table.data.keys()),
             {frozenset(['altSplice', 'NovelORF'])}
+        )
+
+    def test_summarize_fasta_novel_orf_coordinate_header(self):
+        """Summarize with novelORF header tx|gene|ORF-start:end|variant|index."""
+        anno = create_genomic_annotation(ANNOTATION_DATA)
+        tx2gene, coding_tx = get_tx2gene_and_coding_tx(anno)
+        peptides_data = [[
+            'SSSSSSSR',
+            'ENST0001|ENSG0001|ORF-12:80|SNV-1001-T-A|1'
+        ]]
+        peptides = VariantPeptidePool({create_aa_record(*x) for x in peptides_data})
+        label_map = LabelSourceMapping(copy.copy(LABEL_MAP1))
+        source_parser_map = copy.deepcopy(SOURCE_PARSER_MAP)
+        summarizer = PeptidePoolSummarizer(
+            peptides, order=copy.copy(SOURCE_ORDER), label_map=label_map,
+            source_parser_map=source_parser_map
+        )
+        summarizer.count_peptide_source(
+            tx2gene=tx2gene,
+            coding_tx=coding_tx,
+            enzyme='trypsin'
+        )
+        self.assertEqual(
+            set(summarizer.summary_table.data.keys()),
+            {frozenset(['gSNP', 'NovelORF'])}
         )

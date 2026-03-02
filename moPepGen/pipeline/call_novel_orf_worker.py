@@ -98,7 +98,9 @@ def call_novel_orf_for_transcript(
         denylist=canonical_peptides,
         orf_assignment=orf_assignment,
         w2f=w2f_reassignment,
-        check_external_variants=False
+        check_external_variants=False,
+        tx_seq=tx_seq,
+        codon_table=codon_table.codon_table
     )
 
     # Extract ORF sequences
