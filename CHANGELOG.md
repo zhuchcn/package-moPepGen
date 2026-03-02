@@ -10,6 +10,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### [1.5.1] - 2026-03-02
+
 ### [1.5.1-rc5] - 2026-02-25
 
 - Add optional variant peptide flanking context output in `callVariant` via `--output-flanking` and `--context-length`; write per-peptide N/C context to `<output>_flanking_table.txt`.
