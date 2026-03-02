@@ -215,7 +215,7 @@ def split_fasta(args:argparse.Namespace) -> None:
         additional_split=additional_split,
         tx2gene=tx2gene,
         coding_tx=coding_tx,
-        split_mode=getattr(args, 'split_mode', 'peptide')
+        split_mode=args.split_mode
     )
 
     logger.info('Database split finished')
