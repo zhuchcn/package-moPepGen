@@ -295,16 +295,28 @@ class DNASeqRecordWithCoordinates(DNASeqRecord):
         if left_locs and right_locs:
             lhs = self.locations[-1]
             rhs = other.locations[0].shift(len(self))
-            if lhs.ref.end == rhs.ref.start and lhs.query.end == rhs.query.start \
-                    and lhs.ref.seqname == rhs.ref.seqname \
-                    and lhs.query.reading_frame_index == rhs.query.reading_frame_index:
+            should_merge = (
+                lhs.ref.end == rhs.ref.start and lhs.query.end == rhs.query.start
+                and lhs.ref.seqname == rhs.ref.seqname
+                and lhs.query.reading_frame_index == rhs.query.reading_frame_index
+            )
+            if should_merge:
                 query = FeatureLocation(
-                    start=lhs.query.start, end=rhs.query.end,
+                    start=lhs.query.start,
+                    end=rhs.query.end,
                     seqname=lhs.query.seqname,
-                    reading_frame_index=lhs.query.reading_frame_index
+                    reading_frame_index=lhs.query.reading_frame_index,
+                    start_offset=lhs.query.start_offset,
+                    end_offset=rhs.query.end_offset
                 )
-                ref = FeatureLocation(start=lhs.ref.start, end=rhs.ref.end,
-                    seqname=lhs.ref.seqname)
+                ref = FeatureLocation(
+                    start=lhs.ref.start,
+                    end=rhs.ref.end,
+                    seqname=lhs.ref.seqname,
+                    reading_frame_index=lhs.ref.reading_frame_index,
+                    start_offset=lhs.ref.start_offset,
+                    end_offset=rhs.ref.end_offset
+                )
                 new_loc = MatchedLocation(query=query, ref=ref)
                 right_locs.pop(0)
                 left_locs[-1] = new_loc

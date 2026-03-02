@@ -70,8 +70,18 @@ class VariantRecordWithCoordinate():
         start, stop, _ = index.indices(self.location.end)
         start_index = max([start, self.location.start])
         end_index = min([stop, self.location.end])
-        start_offset = self.location.start_offset if start == self.location.start else 0
-        end_offset = self.location.end_offset if stop == self.location.end else 0
+        if start_index == self.location.start:
+            start_offset = self.location.start_offset
+            upstream_cleavage_altering = self.upstream_cleavage_altering
+        else:
+            start_offset = 0
+            upstream_cleavage_altering = False
+        if end_index == self.location.end:
+            end_offset = self.location.end_offset
+            downstream_cleavage_altering = self.downstream_cleavage_altering
+        else:
+            end_offset = 0
+            downstream_cleavage_altering = False
         location = FeatureLocation(
             start=start_index, end=end_index, seqname=self.location.seqname,
             reading_frame_index=self.location.reading_frame_index,
@@ -81,5 +91,7 @@ class VariantRecordWithCoordinate():
             variant=self.variant,
             location=location,
             is_stop_altering=self.is_stop_altering,
-            is_silent=self.is_silent
+            is_silent=self.is_silent,
+            upstream_cleavage_altering=upstream_cleavage_altering,
+            downstream_cleavage_altering=downstream_cleavage_altering
         )

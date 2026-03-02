@@ -271,7 +271,10 @@ def create_pgraph(data:PGraphData, _id:str, known_orf:List[int]=None,
                 query=FeatureLocation(
                     start=query_start, end=query_end, reading_frame_index=val[4]
                 ),
-                ref=FeatureLocation(start=ref_start, end=ref_end, seqname=_id)
+                ref=FeatureLocation(
+                    start=ref_start, end=ref_end, seqname=_id,
+                    start_offset=val[4], end_offset=val[4]
+                )
             )
             locs.append(loc)
 

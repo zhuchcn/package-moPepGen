@@ -217,7 +217,8 @@ class VariantPeptideInfo():
             info = VariantPeptideInfo(str(variant_id), gene_ids, var_ids, variant_id.index)
 
             if check_source:
-                if variant_id.orf_id is not None:
+                if variant_id.orf_id is not None \
+                        and not isinstance(variant_id, pi.CircRNAVariantPeptideIdentifier):
                     info.sources.add(constant.SOURCE_NOVEL_ORF, group_map=group_map)
 
                 for gene_id, _ids in var_ids.items():

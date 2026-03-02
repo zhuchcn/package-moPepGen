@@ -214,6 +214,19 @@ class TestVaraintPeptideIdentifier(unittest.TestCase):
         self.assertEqual(set(peptide_ids[0].variant_ids), {'SNV-111-A-T'})
         self.assertEqual(str(peptide_ids[0]), label)
 
+    def test_parse_variant_id_circ_rna_orf_and_snv(self):
+        """ parse circRNA variant id with ORF token and variant """
+        coding_txs = {}
+        label = 'CIRC-ENSG0001-E2-E3|ORF-50:25:1|SNV-111-A-T|2'
+        peptide_ids = aa.parse_variant_peptide_id(label, coding_txs)
+        self.assertEqual(len(peptide_ids), 1)
+        self.assertIsInstance(peptide_ids[0], pi.CircRNAVariantPeptideIdentifier)
+        peptide_ids:List[pi.CircRNAVariantPeptideIdentifier]
+        self.assertEqual(peptide_ids[0].circ_rna_id, 'CIRC-ENSG0001-E2-E3')
+        self.assertEqual(peptide_ids[0].orf_id, 'ORF-50:25:1')
+        self.assertEqual(set(peptide_ids[0].variant_ids), {'SNV-111-A-T'})
+        self.assertEqual(str(peptide_ids[0]), label)
+
     def test_parse_variant_id_orf(self):
         """ parse variant with orf """
         coding_txs = {}

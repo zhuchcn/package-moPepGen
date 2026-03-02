@@ -429,7 +429,10 @@ def call_peptide_circ_rna(record: 'circ.CircRNAModel',
         backsplicing_only=backsplicing_only,
         w2f=w2f_reassignment,
         check_external_variants=True,
-        context_length=context_length
+        check_orf=True,
+        context_length=context_length,
+        circ_seq=circ_seq,
+        codon_table=codon_table.codon_table
     )
     if not save_graph:
         cgraph, pgraph = None, None
