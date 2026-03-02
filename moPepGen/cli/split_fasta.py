@@ -71,7 +71,7 @@ def add_subparser_split_fasta(subparser:argparse._SubParsersAction):
         help='How to split peptide records. "peptide" keeps current behavior'
         ' (one assignment per peptide sequence). "entry" splits by individual'
         ' FASTA header entry.',
-        metavar='<value>'
+        metavar='<choice>'
     )
     p.add_argument(
         '--order-source',
