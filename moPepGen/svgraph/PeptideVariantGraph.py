@@ -999,7 +999,33 @@ class PeptideVariantGraph():
 
     def create_orf_id_map(self, circ_seq:DNASeqRecordWithCoordinates=None,
             codon_table:Any=None, tx_seq:DNASeqRecordWithCoordinates=None) -> None:
-        """Creates ORF IDs. For circRNA, use ORF-START:STOP:READTHROUGH."""
+        """Create ORF identifier strings for all ORFs in ``self.orfs``.
+
+        Behavior and ID formats:
+        * If the graph represents a circRNA (``self.is_circ_rna()`` is true)
+          and both ``circ_seq`` and ``codon_table`` are provided, ORF IDs have
+          the form ``ORF-START:STOP:READTHROUGH``. ``START`` and ``STOP`` are
+          transcript coordinates on the circular transcript, and
+          ``READTHROUGH`` is the number of full circular passes from start to
+          the selected in-frame stop codon.
+        * Otherwise, if a linear transcript sequence (``tx_seq``) and
+          ``codon_table`` are provided, ORF IDs have the form
+          ``ORF-START:END``. ``START`` is the ORF start coordinate, and
+          ``END`` is the in-frame stop-codon start coordinate inferred from
+          ``tx_seq`` (or taken from ``self.orfs`` if an explicit stop is
+          provided).
+        * If neither of the above cases applies, ORFs are assigned simple
+          sequential IDs: ``ORF1``, ``ORF2``, ...
+
+        Precedence:
+        * CircRNA-specific IDs (``ORF-START:STOP:READTHROUGH``) are generated
+          whenever ``self.is_circ_rna()`` is true and both ``circ_seq`` and
+          ``codon_table`` are supplied.
+        * Linear transcript IDs (``ORF-START:END``) are used only when the
+          circRNA branch is not taken but ``tx_seq`` and ``codon_table`` are
+          available.
+        * Otherwise, the fallback sequential IDs are used.
+        """
         orfs = list(self.orfs)
         orfs.sort()
         if self.is_circ_rna() and circ_seq is not None and codon_table is not None:

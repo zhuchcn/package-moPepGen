@@ -83,7 +83,7 @@ def parse_variant_peptide_id(label:str, coding_txs:Set[str]) -> List[VariantPept
     # ENST0001|ENSG0001|ORF-12:80|1
     # FASTA headers have 5 logical fields separated by | :
     # - (Required) Transcript backbone ID (tx ID, fusion ID, or circRNA ID)
-    # - (Optioanl) Gene ID, required for novel ORF peptides without additional variants.
+    # - (Optional) Gene ID, required for novel ORF peptides without additional variants.
     # - (Optional) Variant IDs separated by |
     # - (Optional) ORF ID, required for novel ORF peptides.
     # - (Required) peptide index.
