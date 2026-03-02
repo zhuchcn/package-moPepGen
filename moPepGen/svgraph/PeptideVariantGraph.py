@@ -1,7 +1,8 @@
 """ Module for peptide variation graph """
 from __future__ import annotations
 import copy
-from typing import Callable, FrozenSet, Iterable, Set, Deque, Dict, List, Tuple, TYPE_CHECKING
+from bisect import bisect_left
+from typing import Callable, FrozenSet, Iterable, Set, Deque, Dict, List, Tuple, TYPE_CHECKING, Any
 from collections import deque
 from Bio.Seq import Seq
 from moPepGen import aa, params
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
     from .PVGPeptideFinder import AnnotatedPeptideLabel
     from moPepGen.circ import CircRNAModel
     from moPepGen.params import CleavageParams
+    from moPepGen.dna import DNASeqRecordWithCoordinates
 
 T = Tuple[Set[PVGNode],Dict[PVGNode,List[PVGNode]]]
 
@@ -867,10 +869,100 @@ class PeptideVariantGraph():
         """
         self.orfs.add(tuple(orf))
 
-    def create_orf_id_map(self) -> None:
-        """ Creates a map for ORF start site and its ID (ORF1, ORF2, etc) """
+    @staticmethod
+    def gene_coordinate_to_query_index(circ_seq:DNASeqRecordWithCoordinates,
+            gene_coord:int) -> int:
+        """Convert gene coordinate in circRNA space to query index."""
+        for loc in circ_seq.locations:
+            ref_start = int(loc.ref.start)
+            ref_end = int(loc.ref.end)
+            if ref_start <= gene_coord < ref_end:
+                return int(loc.query.start) + gene_coord - ref_start
+        raise ValueError(f"Coordinate {gene_coord} not found in circRNA locations.")
+
+    @staticmethod
+    def query_index_to_gene_coordinate(circ_seq:DNASeqRecordWithCoordinates,
+            query_index:int) -> int:
+        """Convert query index in circRNA sequence back to gene coordinate."""
+        for loc in circ_seq.locations:
+            query_start = int(loc.query.start)
+            query_end = int(loc.query.end)
+            if query_start <= query_index < query_end:
+                return int(loc.ref.start) + query_index - query_start
+        raise ValueError(f"Query index {query_index} not found in circRNA locations.")
+
+    @staticmethod
+    def build_circ_stop_codon_cache(circ_seq:DNASeqRecordWithCoordinates,
+            codon_table:Any, max_readthrough:int=3) -> Dict[int, List[int]]:
+        """Cache stop-codon starts by reading frame in extended circular space.
+
+        The cached codon start positions are represented as extended query
+        indices (`pass * seq_len + query_pos`) so downstream lookups can be
+        resolved with binary search.
+        """
+        seq = str(circ_seq.seq).upper()
+        seq_len = len(seq)
+        cache:Dict[int, List[int]] = {0: [], 1: [], 2: []}
+        if seq_len < 3:
+            return cache
+
+        for pass_index in range(max_readthrough + 1):
+            base = pass_index * seq_len
+            for query_pos in range(seq_len):
+                codon_start = base + query_pos
+                codon = ''.join(seq[(codon_start + i) % seq_len] for i in range(3))
+                aa = str(Seq(codon).translate(table=codon_table))
+                if aa == '*':
+                    cache[codon_start % 3].append(codon_start)
+        return cache
+
+    def infer_circ_orf_stop_and_readthrough(self, orf_start:int,
+            circ_seq:DNASeqRecordWithCoordinates,
+            stop_codon_cache:Dict[int, List[int]]) -> Tuple[int,int]:
+        """Infer nearest downstream stop and readthrough for a circRNA ORF."""
+        seq_len = len(circ_seq.seq)
+        if seq_len < 3:
+            return orf_start, 0
+
+        start_query = self.gene_coordinate_to_query_index(circ_seq, orf_start)
+        frame = start_query % 3
+        stop_positions = stop_codon_cache.get(frame, [])
+        if not stop_positions:
+            return orf_start, 0
+
+        i = bisect_left(stop_positions, start_query)
+        if i >= len(stop_positions):
+            return orf_start, 0
+
+        stop_ext = stop_positions[i]
+        start_pass = start_query // seq_len
+        stop_pass = stop_ext // seq_len
+        readthrough = max(0, stop_pass - start_pass)
+        stop_query = stop_ext % seq_len
+        stop_gene = self.query_index_to_gene_coordinate(circ_seq, stop_query)
+        return stop_gene, readthrough
+
+    def create_orf_id_map(self, circ_seq:DNASeqRecordWithCoordinates=None,
+            codon_table:Any=None) -> None:
+        """Creates ORF IDs. For circRNA, use ORF-START:STOP:READTHROUGH."""
         orfs = list(self.orfs)
         orfs.sort()
+        if self.is_circ_rna() and circ_seq is not None and codon_table is not None:
+            self.orf_id_map = {}
+            stop_codon_cache = self.build_circ_stop_codon_cache(
+                circ_seq=circ_seq,
+                codon_table=codon_table,
+                max_readthrough=3
+            )
+            for orf in orfs:
+                orf_start = int(orf[0])
+                orf_stop, readthrough = self.infer_circ_orf_stop_and_readthrough(
+                    orf_start=orf_start,
+                    circ_seq=circ_seq,
+                    stop_codon_cache=stop_codon_cache
+                )
+                self.orf_id_map[orf] = f"ORF-{orf_start}:{orf_stop}:{readthrough}"
+            return
         self.orf_id_map = {v:f"ORF{i+1}" for i,v in enumerate(orfs)}
 
     def call_variant_peptides(self, check_variants:bool=True, mode:str='misc',
@@ -878,7 +970,8 @@ class PeptideVariantGraph():
             circ_rna:CircRNAModel=None, orf_assignment:str='max',
             backsplicing_only:bool=False, truncate_sec:bool=False, w2f:bool=False,
             check_external_variants:bool=True, find_ass:bool=False,
-            force_init_met:bool=True, context_length:int=0
+            force_init_met:bool=True, context_length:int=0,
+            circ_seq:DNASeqRecordWithCoordinates=None, codon_table:Any=None
             ) -> Dict[Seq, List[AnnotatedPeptideLabel]]:
         """ Walk through the graph and find all noncanonical peptides.
 
@@ -973,7 +1066,7 @@ class PeptideVariantGraph():
                 )
 
         if check_orf:
-            self.create_orf_id_map()
+            self.create_orf_id_map(circ_seq=circ_seq, codon_table=codon_table)
 
         finder.translational_modification(w2f, self.denylist)
 

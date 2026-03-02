@@ -226,11 +226,19 @@ XXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ```
 
-For circRNA, the FASTA headers follow this style: `<circRNA-ID>|<variant_id_1>|...|<variant_id_k>|<index>`
+For circRNA, the FASTA headers follow this style:
+`<circRNA-ID>|<ORF-ID>|<variant_id_1>|...|<variant_id_k>|<index>`
+
+`<ORF-ID>` uses this notation:
+`ORF-<START>:<STOP>:<READTHROUGH>`
+
+- `START`: ORF start coordinate in the same coordinate system used by the circRNA ID/backsplicing site.
+- `STOP`: ORF stop codon coordinate in the same coordinate system.
+- `READTHROUGH`: Number of passes across the backsplicing junction from larger to smaller coordinate.
 
 ```
->CIRC-ENSG0001-15:68|1
+>CIRC-ENSG0001-15:68|ORF-50:25:1|1
 XXXXXXXXXXXXX
->CIRC-ENSG0001-153:285|SNV-110-C-A|2
+>CIRC-ENSG0001-153:285|ORF-225:187:2|SNV-110-C-A|2
 XXXXXXXXXXXXX
 ```

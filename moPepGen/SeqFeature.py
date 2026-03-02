@@ -199,7 +199,7 @@ class MatchedLocation():
         """
         start, stop, _ = index.indices(len(self))
         query_start_offset = self.query.start_offset if start == 0 else 0
-        query_end_offset = self.query.end_offset if stop == 0 else 0
+        query_end_offset = self.query.end_offset if stop == len(self) else 0
         query = FeatureLocation(
             seqname=self.query.seqname,
             start=0,
